@@ -1,18 +1,19 @@
 local Library = {
-    Flags = {}, -- Stores toggle/dropdown/keybind states for config
+    Flags = {},
     Theme = {
         Accent = Color3.fromRGB(80, 120, 255),
         Background = Color3.fromRGB(15, 15, 20),
         Text = Color3.fromRGB(255, 255, 255),
-        Secondary = Color3.fromRGB(40, 40, 40)
+        Secondary = Color3.fromRGB(45, 45, 50)
     },
-    ConfigName = "LiquidConfig.json",
-    ToggleKey = Enum.KeyCode.RightShift
+    ToggleKey = Enum.KeyCode.RightShift,
+    Notifications = nil
 }
 
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
@@ -35,39 +36,74 @@ local function applyGlassEffect(guiObject, radius, transparency, strokeTranspare
     end
 end
 
--- CONFIG SYSTEM
-function Library:SaveConfig()
-    if writefile then
-        local data = HttpService:JSONEncode(self.Flags)
-        writefile(self.ConfigName, data)
+-- NOTIFICATION SYSTEM
+function Library:Notify(title, content, duration)
+    if not self.Notifications then
+        local NotifyGui = Instance.new("ScreenGui")
+        NotifyGui.Name = "LiquidNotifications"
+        NotifyGui.DisplayOrder = 999
+        NotifyGui.Parent = player:WaitForChild("PlayerGui")
+        
+        local Holder = Instance.new("Frame")
+        Holder.Size = UDim2.new(0, 300, 1, -20)
+        Holder.Position = UDim2.new(1, -310, 0, 10)
+        Holder.BackgroundTransparency = 1
+        Holder.Parent = NotifyGui
+        
+        local List = Instance.new("UIListLayout")
+        List.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        List.Padding = UDim.new(0, 10)
+        List.Parent = Holder
+        
+        self.Notifications = Holder
     end
-end
-
-function Library:LoadConfig()
-    if isfile and isfile(self.ConfigName) then
-        local data = HttpService:JSONDecode(readfile(self.ConfigName))
-        self.Flags = data
-        return data
-    end
-    return nil
-end
-
-function Library:Destroy()
-    if self.ScreenGui then
-        self.ScreenGui:Destroy()
-    end
-end
-
-function Library:CreateWindow(title, configName)
-    if configName then self.ConfigName = configName .. ".json" end
     
+    local Notif = Instance.new("Frame")
+    Notif.Size = UDim2.new(1, 0, 0, 0) -- Starts at 0 height for tween
+    Notif.ClipsDescendants = true
+    applyGlassEffect(Notif, 8, 0.3, 0.7)
+    Notif.Parent = self.Notifications
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, -10, 0, 25)
+    Title.Position = UDim2.new(0, 10, 0, 5)
+    Title.Text = title
+    Title.Font = Enum.Font.GothamBold
+    Title.TextColor3 = Library.Theme.Accent
+    Title.TextSize = 14
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.BackgroundTransparency = 1
+    Title.Parent = Notif
+    
+    local Body = Instance.new("TextLabel")
+    Body.Size = UDim2.new(1, -20, 0, 40)
+    Body.Position = UDim2.new(0, 10, 0, 25)
+    Body.Text = content
+    Body.Font = Enum.Font.Gotham
+    Body.TextColor3 = Library.Theme.Text
+    Body.TextSize = 13
+    Body.TextWrapped = true
+    Body.TextXAlignment = Enum.TextXAlignment.Left
+    Body.BackgroundTransparency = 1
+    Body.Parent = Notif
+
+    TweenService:Create(Notif, TweenInfo.new(0.4), {Size = UDim2.new(1, 0, 0, 75)}):Play()
+    
+    task.delay(duration or 5, function()
+        TweenService:Create(Notif, TweenInfo.new(0.4), {Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1}):Play()
+        task.wait(0.4)
+        Notif:Destroy()
+    end)
+end
+
+function Library:CreateWindow(title)
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "LiquidLibrary_V2"
+    ScreenGui.Name = "LiquidLibrary"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
     self.ScreenGui = ScreenGui
 
-    -- UI Toggle Logic
+    -- UI Toggle Listener
     UserInputService.InputBegan:Connect(function(input, gpe)
         if not gpe and input.KeyCode == self.ToggleKey then
             ScreenGui.Enabled = not ScreenGui.Enabled
@@ -76,12 +112,12 @@ function Library:CreateWindow(title, configName)
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "Main"
-    MainFrame.Size = UDim2.new(0, 550, 0, 450) -- Made UI Bigger
+    MainFrame.Size = UDim2.new(0, 550, 0, 450)
     MainFrame.Position = UDim2.new(0.5, -275, 0.5, -225)
     applyGlassEffect(MainFrame, 12, 0.25, 0.6)
     MainFrame.Parent = ScreenGui
 
-    -- Dragging Logic
+    -- Dragging
     local dragging, dragStart, startPos
     MainFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -107,16 +143,15 @@ function Library:CreateWindow(title, configName)
 
     local TitleLabel = Instance.new("TextLabel")
     TitleLabel.Text = "  " .. (title or "Liquid Glass")
-    TitleLabel.Size = UDim2.new(1, 0, 1, 0)
+    TitleLabel.Size = UDim2.new(1, -50, 1, 0)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.TextColor3 = Library.Theme.Text
     TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 20
+    TitleLabel.TextSize = 18
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = TopBar
 
     local TabScroll = Instance.new("ScrollingFrame")
-    TabScroll.Name = "TabScroll"
     TabScroll.Size = UDim2.new(0, 140, 1, -55)
     TabScroll.Position = UDim2.new(0, 8, 0, 50)
     TabScroll.BackgroundTransparency = 1
@@ -128,7 +163,6 @@ function Library:CreateWindow(title, configName)
     TabList.Parent = TabScroll
 
     local PageContainer = Instance.new("Frame")
-    PageContainer.Name = "Pages"
     PageContainer.Size = UDim2.new(1, -165, 1, -55)
     PageContainer.Position = UDim2.new(0, 155, 0, 50)
     PageContainer.BackgroundTransparency = 1
@@ -180,7 +214,6 @@ function Library:CreateWindow(title, configName)
 
         local Elements = {}
 
-        -- BUTTON
         function Elements:CreateButton(text, callback)
             local Button = Instance.new("TextButton")
             Button.Size = UDim2.new(1, -10, 0, 40)
@@ -190,17 +223,12 @@ function Library:CreateWindow(title, configName)
             Button.TextSize = 14
             applyGlassEffect(Button, 6, 0.5, 0.7)
             Button.Parent = Page
-
-            Button.MouseButton1Click:Connect(function()
-                callback()
-            end)
+            Button.MouseButton1Click:Connect(callback)
             return Button
         end
 
-        -- TOGGLE
         function Elements:CreateToggle(text, flag, default, callback)
             Library.Flags[flag] = default or false
-            
             local ToggleBtn = Instance.new("TextButton")
             ToggleBtn.Size = UDim2.new(1, -10, 0, 40)
             ToggleBtn.Text = "   " .. text
@@ -222,11 +250,17 @@ function Library:CreateWindow(title, configName)
                 Library.Flags[flag] = not Library.Flags[flag]
                 Indicator.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
                 callback(Library.Flags[flag])
-                Library:SaveConfig()
+            end)
+            
+            -- Function to update UI if config loaded
+            task.spawn(function()
+                while task.wait(0.5) do
+                    if not ToggleBtn.Parent then break end
+                    Indicator.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
+                end
             end)
         end
 
-        -- KEYBIND
         function Elements:CreateKeybind(text, flag, default, callback)
             Library.Flags[flag] = default.Name
             local currentKey = default
@@ -245,7 +279,7 @@ function Library:CreateWindow(title, configName)
             local KeyLabel = Instance.new("TextLabel")
             KeyLabel.Size = UDim2.new(0, 80, 0, 24)
             KeyLabel.Position = UDim2.new(1, -90, 0.5, -12)
-            KeyLabel.Text = currentKey.Name
+            KeyLabel.Text = Library.Flags[flag]
             KeyLabel.Font = Enum.Font.GothamBold
             KeyLabel.TextColor3 = Library.Theme.Accent
             applyGlassEffect(KeyLabel, 4, 0.3, 0.5)
@@ -262,16 +296,14 @@ function Library:CreateWindow(title, configName)
                     Library.Flags[flag] = currentKey.Name
                     KeyLabel.Text = currentKey.Name
                     binding = false
-                    Library:SaveConfig()
-                elseif not binding and input.KeyCode == currentKey then
+                elseif not binding and input.KeyCode == Enum.KeyCode[Library.Flags[flag]] then
                     callback()
                 end
             end)
         end
 
-        -- DROPDOWN
         function Elements:CreateDropdown(text, flag, list, callback)
-            Library.Flags[flag] = list[1]
+            Library.Flags[flag] = Library.Flags[flag] or list[1]
             local DropFrame = Instance.new("Frame")
             DropFrame.Size = UDim2.new(1, -10, 0, 40)
             DropFrame.ClipsDescendants = true
@@ -280,7 +312,7 @@ function Library:CreateWindow(title, configName)
 
             local DropBtn = Instance.new("TextButton")
             DropBtn.Size = UDim2.new(1, 0, 0, 40)
-            DropBtn.Text = "   " .. text .. " : " .. list[1]
+            DropBtn.Text = "   " .. text .. " : " .. Library.Flags[flag]
             DropBtn.Font = Enum.Font.Gotham
             DropBtn.TextColor3 = Library.Theme.Text
             DropBtn.TextSize = 14
@@ -319,12 +351,53 @@ function Library:CreateWindow(title, configName)
                     toggled = false
                     DropFrame.Size = UDim2.new(1, -10, 0, 40)
                     callback(val)
-                    Library:SaveConfig()
                 end)
             end
         end
-
+        
         return Elements
+    end
+
+    function Window:CreateConfigTab()
+        local ConfigTab = self:CreateTab("Settings")
+        
+        local FileName = Instance.new("TextBox")
+        FileName.Size = UDim2.new(1, -10, 0, 40)
+        FileName.PlaceholderText = "Config Name..."
+        FileName.Text = "MyConfig"
+        FileName.Font = Enum.Font.Gotham
+        FileName.TextColor3 = Library.Theme.Text
+        FileName.TextSize = 14
+        applyGlassEffect(FileName, 6, 0.4, 0.8)
+        FileName.Parent = PageContainer:FindFirstChild("Settings", true)
+
+        ConfigTab:CreateButton("Save Configuration", function()
+            if writefile then
+                local path = FileName.Text .. ".json"
+                writefile(path, HttpService:JSONEncode(Library.Flags))
+                Library:Notify("Config System", "Successfully saved to " .. path, 3)
+            end
+        end)
+
+        ConfigTab:CreateButton("Load Configuration", function()
+            local path = FileName.Text .. ".json"
+            if isfile and isfile(path) then
+                local data = HttpService:JSONDecode(readfile(path))
+                for flag, value in pairs(data) do
+                    Library.Flags[flag] = value
+                end
+                Library:Notify("Config System", "Successfully loaded " .. path, 3)
+            else
+                Library:Notify("Error", "Config file not found!", 3)
+            end
+        end)
+
+        ConfigTab:CreateButton("Destroy UI", function()
+            Library.ScreenGui:Destroy()
+            if Library.Notifications then Library.Notifications.Parent:Destroy() end
+        end)
+
+        return ConfigTab
     end
 
     return Window
