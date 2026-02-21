@@ -453,7 +453,4 @@ function Library:CreateWindow(title)
 
     return Window
 end
-
-----------------------------------------------------------------------
--- LOADSTRING EXAMPLE (HOW TO USE IT)
-----------------------------------------------------------------------
+print("loaded")
