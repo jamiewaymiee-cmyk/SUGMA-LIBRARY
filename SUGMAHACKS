@@ -1,14 +1,24 @@
--- Liquid Glass UI Library
-local Library = {}
+local Library = {
+    Flags = {}, -- Stores toggle/dropdown/keybind states for config
+    Theme = {
+        Accent = Color3.fromRGB(80, 120, 255),
+        Background = Color3.fromRGB(15, 15, 20),
+        Text = Color3.fromRGB(255, 255, 255),
+        Secondary = Color3.fromRGB(40, 40, 40)
+    },
+    ConfigName = "LiquidConfig.json",
+    ToggleKey = Enum.KeyCode.RightShift
+}
 
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
--- Helper: Apply the glass effect from your reference
+-- INTERNAL HELPERS
 local function applyGlassEffect(guiObject, radius, transparency, strokeTransparency)
-    guiObject.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    guiObject.BackgroundColor3 = Library.Theme.Background
     guiObject.BackgroundTransparency = transparency or 0.4
     guiObject.BorderSizePixel = 0
     
@@ -25,17 +35,50 @@ local function applyGlassEffect(guiObject, radius, transparency, strokeTranspare
     end
 end
 
-function Library:CreateWindow(title)
+-- CONFIG SYSTEM
+function Library:SaveConfig()
+    if writefile then
+        local data = HttpService:JSONEncode(self.Flags)
+        writefile(self.ConfigName, data)
+    end
+end
+
+function Library:LoadConfig()
+    if isfile and isfile(self.ConfigName) then
+        local data = HttpService:JSONDecode(readfile(self.ConfigName))
+        self.Flags = data
+        return data
+    end
+    return nil
+end
+
+function Library:Destroy()
+    if self.ScreenGui then
+        self.ScreenGui:Destroy()
+    end
+end
+
+function Library:CreateWindow(title, configName)
+    if configName then self.ConfigName = configName .. ".json" end
+    
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "LiquidLibrary"
+    ScreenGui.Name = "LiquidLibrary_V2"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
+    self.ScreenGui = ScreenGui
+
+    -- UI Toggle Logic
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if not gpe and input.KeyCode == self.ToggleKey then
+            ScreenGui.Enabled = not ScreenGui.Enabled
+        end
+    end)
 
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "Main"
-    MainFrame.Size = UDim2.new(0, 450, 0, 350)
-    MainFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
-    applyGlassEffect(MainFrame, 12, 0.3, 0.7)
+    MainFrame.Size = UDim2.new(0, 550, 0, 450) -- Made UI Bigger
+    MainFrame.Position = UDim2.new(0.5, -275, 0.5, -225)
+    applyGlassEffect(MainFrame, 12, 0.25, 0.6)
     MainFrame.Parent = ScreenGui
 
     -- Dragging Logic
@@ -58,140 +101,188 @@ function Library:CreateWindow(title)
     end)
 
     local TopBar = Instance.new("Frame")
-    TopBar.Size = UDim2.new(1, 0, 0, 40)
-    applyGlassEffect(TopBar, 12, 0.5, nil)
+    TopBar.Size = UDim2.new(1, 0, 0, 45)
+    applyGlassEffect(TopBar, 12, 0.4, nil)
     TopBar.Parent = MainFrame
 
     local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Text = title or "UI Library"
-    TitleLabel.Size = UDim2.new(1, -10, 1, 0)
-    TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+    TitleLabel.Text = "  " .. (title or "Liquid Glass")
+    TitleLabel.Size = UDim2.new(1, 0, 1, 0)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.TextColor3 = Color3.new(1, 1, 1)
+    TitleLabel.TextColor3 = Library.Theme.Text
     TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 18
+    TitleLabel.TextSize = 20
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = TopBar
 
-    local TabContainer = Instance.new("Frame")
-    TabContainer.Name = "Tabs"
-    TabContainer.Size = UDim2.new(0, 120, 1, -50)
-    TabContainer.Position = UDim2.new(0, 5, 0, 45)
-    TabContainer.BackgroundTransparency = 1
-    TabContainer.Parent = MainFrame
+    local TabScroll = Instance.new("ScrollingFrame")
+    TabScroll.Name = "TabScroll"
+    TabScroll.Size = UDim2.new(0, 140, 1, -55)
+    TabScroll.Position = UDim2.new(0, 8, 0, 50)
+    TabScroll.BackgroundTransparency = 1
+    TabScroll.ScrollBarThickness = 0
+    TabScroll.Parent = MainFrame
 
     local TabList = Instance.new("UIListLayout")
     TabList.Padding = UDim.new(0, 5)
-    TabList.Parent = TabContainer
+    TabList.Parent = TabScroll
 
     local PageContainer = Instance.new("Frame")
     PageContainer.Name = "Pages"
-    PageContainer.Size = UDim2.new(1, -135, 1, -50)
-    PageContainer.Position = UDim2.new(0, 130, 0, 45)
+    PageContainer.Size = UDim2.new(1, -165, 1, -55)
+    PageContainer.Position = UDim2.new(0, 155, 0, 50)
     PageContainer.BackgroundTransparency = 1
     PageContainer.Parent = MainFrame
 
-    local Window = {
-        CurrentTab = nil
-    }
+    local Window = { CurrentTab = nil }
 
     function Window:CreateTab(name)
         local TabButton = Instance.new("TextButton")
-        TabButton.Size = UDim2.new(1, 0, 0, 35)
+        TabButton.Size = UDim2.new(1, -5, 0, 38)
         TabButton.Text = name
-        TabButton.TextColor3 = Color3.new(1, 1, 1)
+        TabButton.TextColor3 = Library.Theme.Text
         TabButton.Font = Enum.Font.GothamSemibold
         TabButton.TextSize = 14
         applyGlassEffect(TabButton, 6, 0.6, 0.8)
-        TabButton.Parent = TabContainer
+        TabButton.Parent = TabScroll
 
         local Page = Instance.new("ScrollingFrame")
         Page.Size = UDim2.new(1, 0, 1, 0)
         Page.Visible = false
         Page.BackgroundTransparency = 1
-        Page.ScrollBarThickness = 2
-        Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+        Page.ScrollBarThickness = 3
+        Page.ScrollBarImageColor3 = Library.Theme.Accent
         Page.Parent = PageContainer
 
         local PageList = Instance.new("UIListLayout")
-        PageList.Padding = UDim.new(0, 8)
+        PageList.Padding = UDim.new(0, 10)
+        PageList.HorizontalAlignment = Enum.HorizontalAlignment.Center
         PageList.Parent = Page
         
         PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 10)
+            Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
         end)
 
         TabButton.MouseButton1Click:Connect(function()
             for _, p in pairs(PageContainer:GetChildren()) do p.Visible = false end
-            for _, b in pairs(TabContainer:GetChildren()) do 
-                if b:IsA("TextButton") then b.BackgroundColor3 = Color3.fromRGB(15, 15, 20) end
+            for _, b in pairs(TabScroll:GetChildren()) do 
+                if b:IsA("TextButton") then b.BackgroundColor3 = Library.Theme.Background end
             end
             Page.Visible = true
-            TabButton.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+            TabButton.BackgroundColor3 = Library.Theme.Accent
         end)
 
-        -- Default selection
         if Window.CurrentTab == nil then
             Page.Visible = true
-            TabButton.BackgroundColor3 = Color3.fromRGB(80, 120, 255)
+            TabButton.BackgroundColor3 = Library.Theme.Accent
             Window.CurrentTab = name
         end
 
         local Elements = {}
 
+        -- BUTTON
         function Elements:CreateButton(text, callback)
             local Button = Instance.new("TextButton")
-            Button.Size = UDim2.new(1, -10, 0, 35)
+            Button.Size = UDim2.new(1, -10, 0, 40)
             Button.Text = text
             Button.Font = Enum.Font.Gotham
-            Button.TextColor3 = Color3.new(1, 1, 1)
+            Button.TextColor3 = Library.Theme.Text
             Button.TextSize = 14
-            applyGlassEffect(Button, 6, 0.5, 0.8)
+            applyGlassEffect(Button, 6, 0.5, 0.7)
             Button.Parent = Page
 
             Button.MouseButton1Click:Connect(function()
                 callback()
             end)
+            return Button
         end
 
-        function Elements:CreateToggle(text, default, callback)
-            local state = default or false
+        -- TOGGLE
+        function Elements:CreateToggle(text, flag, default, callback)
+            Library.Flags[flag] = default or false
+            
             local ToggleBtn = Instance.new("TextButton")
-            ToggleBtn.Size = UDim2.new(1, -10, 0, 35)
-            ToggleBtn.Text = "  " .. text
+            ToggleBtn.Size = UDim2.new(1, -10, 0, 40)
+            ToggleBtn.Text = "   " .. text
             ToggleBtn.Font = Enum.Font.Gotham
-            ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+            ToggleBtn.TextColor3 = Library.Theme.Text
             ToggleBtn.TextSize = 14
             ToggleBtn.TextXAlignment = Enum.TextXAlignment.Left
-            applyGlassEffect(ToggleBtn, 6, 0.5, 0.8)
+            applyGlassEffect(ToggleBtn, 6, 0.5, 0.7)
             ToggleBtn.Parent = Page
 
             local Indicator = Instance.new("Frame")
-            Indicator.Size = UDim2.new(0, 20, 0, 20)
-            Indicator.Position = UDim2.new(1, -30, 0.5, -10)
+            Indicator.Size = UDim2.new(0, 24, 0, 24)
+            Indicator.Position = UDim2.new(1, -35, 0.5, -12)
             applyGlassEffect(Indicator, 4, 0.2, 0.5)
-            Indicator.BackgroundColor3 = state and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(40, 40, 40)
+            Indicator.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
             Indicator.Parent = ToggleBtn
 
             ToggleBtn.MouseButton1Click:Connect(function()
-                state = not state
-                Indicator.BackgroundColor3 = state and Color3.fromRGB(80, 120, 255) or Color3.fromRGB(40, 40, 40)
-                callback(state)
+                Library.Flags[flag] = not Library.Flags[flag]
+                Indicator.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
+                callback(Library.Flags[flag])
+                Library:SaveConfig()
             end)
         end
 
-        function Elements:CreateDropdown(text, list, callback)
+        -- KEYBIND
+        function Elements:CreateKeybind(text, flag, default, callback)
+            Library.Flags[flag] = default.Name
+            local currentKey = default
+            local binding = false
+
+            local BindBtn = Instance.new("TextButton")
+            BindBtn.Size = UDim2.new(1, -10, 0, 40)
+            BindBtn.Text = "   " .. text
+            BindBtn.Font = Enum.Font.Gotham
+            BindBtn.TextColor3 = Library.Theme.Text
+            BindBtn.TextSize = 14
+            BindBtn.TextXAlignment = Enum.TextXAlignment.Left
+            applyGlassEffect(BindBtn, 6, 0.5, 0.7)
+            BindBtn.Parent = Page
+
+            local KeyLabel = Instance.new("TextLabel")
+            KeyLabel.Size = UDim2.new(0, 80, 0, 24)
+            KeyLabel.Position = UDim2.new(1, -90, 0.5, -12)
+            KeyLabel.Text = currentKey.Name
+            KeyLabel.Font = Enum.Font.GothamBold
+            KeyLabel.TextColor3 = Library.Theme.Accent
+            applyGlassEffect(KeyLabel, 4, 0.3, 0.5)
+            KeyLabel.Parent = BindBtn
+
+            BindBtn.MouseButton1Click:Connect(function()
+                binding = true
+                KeyLabel.Text = "..."
+            end)
+
+            UserInputService.InputBegan:Connect(function(input)
+                if binding and input.UserInputType == Enum.UserInputType.Keyboard then
+                    currentKey = input.KeyCode
+                    Library.Flags[flag] = currentKey.Name
+                    KeyLabel.Text = currentKey.Name
+                    binding = false
+                    Library:SaveConfig()
+                elseif not binding and input.KeyCode == currentKey then
+                    callback()
+                end
+            end)
+        end
+
+        -- DROPDOWN
+        function Elements:CreateDropdown(text, flag, list, callback)
+            Library.Flags[flag] = list[1]
             local DropFrame = Instance.new("Frame")
-            DropFrame.Size = UDim2.new(1, -10, 0, 35)
+            DropFrame.Size = UDim2.new(1, -10, 0, 40)
             DropFrame.ClipsDescendants = true
-            applyGlassEffect(DropFrame, 6, 0.5, 0.8)
+            applyGlassEffect(DropFrame, 6, 0.5, 0.7)
             DropFrame.Parent = Page
 
             local DropBtn = Instance.new("TextButton")
-            DropBtn.Size = UDim2.new(1, 0, 0, 35)
-            DropBtn.Text = "  " .. text .. " [V]"
+            DropBtn.Size = UDim2.new(1, 0, 0, 40)
+            DropBtn.Text = "   " .. text .. " : " .. list[1]
             DropBtn.Font = Enum.Font.Gotham
-            DropBtn.TextColor3 = Color3.new(1, 1, 1)
+            DropBtn.TextColor3 = Library.Theme.Text
             DropBtn.TextSize = 14
             DropBtn.BackgroundTransparency = 1
             DropBtn.TextXAlignment = Enum.TextXAlignment.Left
@@ -199,7 +290,7 @@ function Library:CreateWindow(title)
 
             local ItemList = Instance.new("Frame")
             ItemList.Size = UDim2.new(1, 0, 0, #list * 30)
-            ItemList.Position = UDim2.new(0, 0, 0, 35)
+            ItemList.Position = UDim2.new(0, 0, 0, 40)
             ItemList.BackgroundTransparency = 1
             ItemList.Parent = DropFrame
 
@@ -209,7 +300,8 @@ function Library:CreateWindow(title)
             local toggled = false
             DropBtn.MouseButton1Click:Connect(function()
                 toggled = not toggled
-                DropFrame.Size = toggled and UDim2.new(1, -10, 0, 35 + (30 * #list)) or UDim2.new(1, -10, 0, 35)
+                DropFrame.Size = toggled and UDim2.new(1, -10, 0, 40 + (#list * 30)) or UDim2.new(1, -10, 0, 40)
+                Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
             end)
 
             for _, val in pairs(list) do
@@ -217,15 +309,17 @@ function Library:CreateWindow(title)
                 Item.Size = UDim2.new(1, 0, 0, 30)
                 Item.Text = val
                 Item.Font = Enum.Font.Gotham
-                Item.TextColor3 = Color3.fromRGB(200, 200, 200)
+                Item.TextColor3 = Color3.fromRGB(180, 180, 180)
                 Item.BackgroundTransparency = 1
                 Item.Parent = ItemList
 
                 Item.MouseButton1Click:Connect(function()
-                    DropBtn.Text = "  " .. text .. ": " .. val
+                    Library.Flags[flag] = val
+                    DropBtn.Text = "   " .. text .. " : " .. val
                     toggled = false
-                    DropFrame.Size = UDim2.new(1, -10, 0, 35)
+                    DropFrame.Size = UDim2.new(1, -10, 0, 40)
                     callback(val)
+                    Library:SaveConfig()
                 end)
             end
         end
