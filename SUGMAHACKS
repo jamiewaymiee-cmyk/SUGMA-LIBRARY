@@ -47,19 +47,23 @@ function Library:Update(targetFlag)
         if data.Type == "Toggle" then
             data.Indicator.BackgroundColor3 = self.Flags[flag] and self.Theme.Accent or self.Theme.Secondary
         elseif data.Type == "Dropdown" then
-            data.Button.Text = "   " .. data.Title .. " : " .. tostring(self.Flags[flag])
+            data.Button.Text = "    " .. data.Title .. " : " .. tostring(self.Flags[flag])
         elseif data.Type == "Keybind" then
             data.Label.Text = tostring(self.Flags[flag])
         elseif data.Type == "TextBox" then
             data.Box.Text = tostring(self.Flags[flag])
+        elseif data.Type == "Slider" then
+            local percent = math.clamp((self.Flags[flag] - data.Min) / (data.Max - data.Min), 0, 1)
+            data.Fill.Size = UDim2.new(percent, 0, 1, 0)
+            data.ValLabel.Text = tostring(self.Flags[flag])
         end
     end
 
     if targetFlag then
-        refresh(targetFlag) -- Update only one specific UI element
+        refresh(targetFlag)
     else
         for flag, _ in pairs(self.Elements) do
-            refresh(flag) -- Update everything
+            refresh(flag)
         end
     end
 end
@@ -129,7 +133,6 @@ function Library:CreateWindow(title)
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
     self.ScreenGui = ScreenGui
 
-    -- UI Toggle
     UserInputService.InputBegan:Connect(function(input, gpe)
         if not gpe and input.KeyCode == self.ToggleKey then
             self.Opened = not self.Opened
@@ -139,12 +142,11 @@ function Library:CreateWindow(title)
 
     local Main = Instance.new("Frame")
     Main.Name = "Main"
-    Main.Size = UDim2.new(0, 650, 0, 500) -- INCREASED UI SIZE
+    Main.Size = UDim2.new(0, 650, 0, 500)
     Main.Position = UDim2.new(0.5, -325, 0.5, -250)
     applyGlassEffect(Main, 12, 0.2, 0.6)
     Main.Parent = ScreenGui
 
-    -- Dragging
     local dragging, dragStart, startPos
     Main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -236,6 +238,24 @@ function Library:CreateWindow(title)
 
         local Elements = {}
 
+        function Elements:CreateLabel(text)
+            local Label = Instance.new("TextLabel")
+            Label.Size = UDim2.new(1, -10, 0, 30)
+            Label.BackgroundTransparency = 1
+            Label.Text = "    " .. text
+            Label.Font = Enum.Font.GothamSemibold
+            Label.TextColor3 = Library.Theme.Text
+            Label.TextSize = 14
+            Label.TextXAlignment = Enum.TextXAlignment.Left
+            Label.Parent = Page
+            
+            local LabelObj = {}
+            function LabelObj:Set(newText)
+                Label.Text = "    " .. newText
+            end
+            return LabelObj
+        end
+
         function Elements:CreateButton(text, callback)
             local Btn = Instance.new("TextButton")
             Btn.Size = UDim2.new(1, -10, 0, 45)
@@ -246,6 +266,83 @@ function Library:CreateWindow(title)
             applyGlassEffect(Btn, 6, 0.5, 0.7)
             Btn.Parent = Page
             Btn.MouseButton1Click:Connect(callback)
+        end
+
+        function Elements:CreateSlider(text, flag, min, max, default, callback)
+            Library.Flags[flag] = default or min
+            
+            local SliderFrame = Instance.new("Frame")
+            SliderFrame.Size = UDim2.new(1, -10, 0, 55)
+            applyGlassEffect(SliderFrame, 6, 0.5, 0.7)
+            SliderFrame.Parent = Page
+
+            local Title = Instance.new("TextLabel")
+            Title.Size = UDim2.new(1, -20, 0, 25)
+            Title.Position = UDim2.new(0, 10, 0, 5)
+            Title.BackgroundTransparency = 1
+            Title.Text = text
+            Title.Font = Enum.Font.Gotham
+            Title.TextColor3 = Library.Theme.Text
+            Title.TextSize = 14
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+            Title.Parent = SliderFrame
+
+            local ValLabel = Instance.new("TextLabel")
+            ValLabel.Size = UDim2.new(0, 40, 0, 25)
+            ValLabel.Position = UDim2.new(1, -50, 0, 5)
+            ValLabel.BackgroundTransparency = 1
+            ValLabel.Text = tostring(Library.Flags[flag])
+            ValLabel.Font = Enum.Font.GothamBold
+            ValLabel.TextColor3 = Library.Theme.Accent
+            ValLabel.TextSize = 14
+            ValLabel.TextXAlignment = Enum.TextXAlignment.Right
+            ValLabel.Parent = SliderFrame
+
+            local SliderBack = Instance.new("Frame")
+            SliderBack.Size = UDim2.new(1, -20, 0, 6)
+            SliderBack.Position = UDim2.new(0, 10, 0, 38)
+            SliderBack.BackgroundColor3 = Library.Theme.Secondary
+            SliderBack.BorderSizePixel = 0
+            SliderBack.Parent = SliderFrame
+            Instance.new("UICorner", SliderBack).CornerRadius = UDim.new(0, 4)
+
+            local SliderFill = Instance.new("Frame")
+            SliderFill.Size = UDim2.new((Library.Flags[flag] - min) / (max - min), 0, 1, 0)
+            SliderFill.BackgroundColor3 = Library.Theme.Accent
+            SliderFill.BorderSizePixel = 0
+            SliderFill.Parent = SliderBack
+            Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 4)
+
+            Library.Elements[flag] = {Type = "Slider", Fill = SliderFill, ValLabel = ValLabel, Min = min, Max = max}
+
+            local function move()
+                local mousePos = UserInputService:GetMouseLocation().X
+                local framePos = SliderBack.AbsolutePosition.X
+                local frameSize = SliderBack.AbsoluteSize.X
+                local percent = math.clamp((mousePos - framePos) / frameSize, 0, 1)
+                local value = math.floor(min + (max - min) * percent)
+                
+                Library.Flags[flag] = value
+                SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+                ValLabel.Text = tostring(value)
+                if callback then callback(value) end
+            end
+
+            SliderFrame.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    local moveConn
+                    moveConn = UserInputService.InputChanged:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseMovement then move() end
+                    end)
+                    move()
+                    UserInputService.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 and moveConn then
+                            moveConn:Disconnect()
+                            moveConn = nil
+                        end
+                    end)
+                end
+            end)
         end
 
         function Elements:CreateTextBox(text, flag, default, callback)
@@ -267,7 +364,6 @@ function Library:CreateWindow(title)
             Box.TextXAlignment = Enum.TextXAlignment.Left
             Box.Parent = BoxFrame
 
-            -- Register for update system
             Library.Elements[flag] = {Type = "TextBox", Box = Box}
 
             Box.FocusLost:Connect(function()
@@ -295,12 +391,11 @@ function Library:CreateWindow(title)
             Ind.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
             Ind.Parent = Toggle
 
-            -- Register for update system
             Library.Elements[flag] = {Type = "Toggle", Indicator = Ind}
 
             Toggle.MouseButton1Click:Connect(function()
                 Library.Flags[flag] = not Library.Flags[flag]
-                Library:Update(flag) -- Use update function
+                Library:Update(flag)
                 if callback then callback(Library.Flags[flag]) end
             end)
         end
@@ -327,7 +422,6 @@ function Library:CreateWindow(title)
             applyGlassEffect(Lbl, 4, 0.3, 0.5)
             Lbl.Parent = Bind
 
-            -- Register for update system
             Library.Elements[flag] = {Type = "Keybind", Label = Lbl}
 
             Bind.MouseButton1Click:Connect(function()
@@ -338,7 +432,7 @@ function Library:CreateWindow(title)
             UserInputService.InputBegan:Connect(function(input)
                 if binding and input.UserInputType == Enum.UserInputType.Keyboard then
                     Library.Flags[flag] = input.KeyCode.Name
-                    Library:Update(flag) -- Use update function
+                    Library:Update(flag)
                     binding = false
                 elseif not binding and input.KeyCode.Name == Library.Flags[flag] then
                     if callback then callback() end
@@ -348,7 +442,7 @@ function Library:CreateWindow(title)
 
         function Elements:CreateDropdown(text, flag, list, callback)
             Library.Flags[flag] = list[1]
-            local itemHeight = 35 -- INCREASED DROPDOWN HEIGHT
+            local itemHeight = 35
 
             local Drop = Instance.new("Frame")
             Drop.Size = UDim2.new(1, -10, 0, 45)
@@ -373,7 +467,6 @@ function Library:CreateWindow(title)
             Container.Parent = Drop
             Instance.new("UIListLayout", Container)
 
-            -- Register for update system
             Library.Elements[flag] = {Type = "Dropdown", Button = Btn, Title = text}
 
             local open = false
@@ -393,7 +486,7 @@ function Library:CreateWindow(title)
                 Item.Parent = Container
                 Item.MouseButton1Click:Connect(function()
                     Library.Flags[flag] = v
-                    Library:Update(flag) -- Use update function
+                    Library:Update(flag)
                     open = false
                     Drop.Size = UDim2.new(1, -10, 0, 45)
                     if callback then callback(v) end
@@ -406,8 +499,6 @@ function Library:CreateWindow(title)
 
     function Window:CreateConfigTab()
         local Tab = self:CreateTab("Settings")
-        
-        -- Cleanly integrated the Textbox using our new function
         Tab:CreateTextBox("Config Name...", "ConfigName", "DefaultConfig")
 
         Tab:CreateButton("Save Config", function()
@@ -423,19 +514,10 @@ function Library:CreateWindow(title)
         Tab:CreateButton("Load Config", function()
             local name = Library.Flags["ConfigName"] .. ".json"
             if isfile and isfile(name) then
-                local success, result = pcall(function()
-                    return HttpService:JSONDecode(readfile(name))
-                end)
-                
+                local success, result = pcall(function() return HttpService:JSONDecode(readfile(name)) end)
                 if success and type(result) == "table" then
-                    -- Overwrite current flags with loaded data
-                    for key, val in pairs(result) do
-                        Library.Flags[key] = val
-                    end
-                    
-                    -- UPDATE ALL UI ELEMENTS AT ONCE
-                    Library:Update() 
-                    
+                    for key, val in pairs(result) do Library.Flags[key] = val end
+                    Library:Update()
                     Library:Notify("Config", "Successfully loaded " .. name, 3)
                 else
                     Library:Notify("Error", "Failed to parse config file.", 3)
