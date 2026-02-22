@@ -23,7 +23,6 @@ local function applyGlassEffect(guiObject, radius, transparency, strokeTranspare
     guiObject.BackgroundColor3 = Library.Theme.Background
     guiObject.BackgroundTransparency = transparency or 0.4
     guiObject.BorderSizePixel = 0
-    guiObject.ZIndex = 10000 -- Force ZIndex High
     
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, radius or 8)
@@ -75,15 +74,12 @@ function Library:Notify(title, content, duration)
         local NotifyGui = Instance.new("ScreenGui")
         NotifyGui.Name = "LiquidNotifications"
         NotifyGui.Parent = player:WaitForChild("PlayerGui")
-        NotifyGui.DisplayOrder = 10000 -- Overlap Everything
-        NotifyGui.IgnoreGuiInset = true
         
         local Holder = Instance.new("Frame")
         Holder.Size = UDim2.new(0, 300, 1, -20)
         Holder.Position = UDim2.new(1, -310, 0, 10)
         Holder.BackgroundTransparency = 1
         Holder.Parent = NotifyGui
-        Holder.ZIndex = 10000
         
         local List = Instance.new("UIListLayout")
         List.VerticalAlignment = Enum.VerticalAlignment.Bottom
@@ -95,7 +91,6 @@ function Library:Notify(title, content, duration)
     local Notif = Instance.new("Frame")
     Notif.Size = UDim2.new(1, 0, 0, 80)
     Notif.ClipsDescendants = true
-    Notif.ZIndex = 10000
     applyGlassEffect(Notif, 8, 0.2, 0.7)
     Notif.Parent = self.Notifications
     
@@ -108,7 +103,6 @@ function Library:Notify(title, content, duration)
     T.TextSize = 14
     T.TextXAlignment = Enum.TextXAlignment.Left
     T.BackgroundTransparency = 1
-    T.ZIndex = 10001
     T.Parent = Notif
     
     local B = Instance.new("TextLabel")
@@ -121,7 +115,6 @@ function Library:Notify(title, content, duration)
     B.TextWrapped = true
     B.TextXAlignment = Enum.TextXAlignment.Left
     B.BackgroundTransparency = 1
-    B.ZIndex = 10001
     B.Parent = Notif
 
     task.delay(duration or 5, function()
@@ -138,8 +131,6 @@ function Library:CreateWindow(title)
     ScreenGui.Name = "LiquidUI"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
-    ScreenGui.DisplayOrder = 10000 -- Overlap Everything
-    ScreenGui.IgnoreGuiInset = true
     self.ScreenGui = ScreenGui
 
     UserInputService.InputBegan:Connect(function(input, gpe)
@@ -153,7 +144,6 @@ function Library:CreateWindow(title)
     Main.Name = "Main"
     Main.Size = UDim2.new(0, 650, 0, 500)
     Main.Position = UDim2.new(0.5, -325, 0.5, -250)
-    Main.ZIndex = 10000
     applyGlassEffect(Main, 12, 0.2, 0.6)
     Main.Parent = ScreenGui
 
@@ -175,7 +165,6 @@ function Library:CreateWindow(title)
 
     local TopBar = Instance.new("Frame")
     TopBar.Size = UDim2.new(1, 0, 0, 45)
-    TopBar.ZIndex = 10001
     applyGlassEffect(TopBar, 12, 0.4, nil)
     TopBar.Parent = Main
 
@@ -187,7 +176,6 @@ function Library:CreateWindow(title)
     Title.Font = Enum.Font.GothamBold
     Title.TextSize = 18
     Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.ZIndex = 10002
     Title.Parent = TopBar
 
     local TabScroll = Instance.new("ScrollingFrame")
@@ -195,7 +183,6 @@ function Library:CreateWindow(title)
     TabScroll.Position = UDim2.new(0, 8, 0, 50)
     TabScroll.BackgroundTransparency = 1
     TabScroll.ScrollBarThickness = 0
-    TabScroll.ZIndex = 10001
     TabScroll.Parent = Main
     Instance.new("UIListLayout", TabScroll).Padding = UDim.new(0, 5)
 
@@ -203,7 +190,6 @@ function Library:CreateWindow(title)
     PageContainer.Size = UDim2.new(1, -175, 1, -55)
     PageContainer.Position = UDim2.new(0, 165, 0, 50)
     PageContainer.BackgroundTransparency = 1
-    PageContainer.ZIndex = 10001
     PageContainer.Parent = Main
 
     local Window = { CurrentTab = nil }
@@ -215,7 +201,6 @@ function Library:CreateWindow(title)
         TabBtn.TextColor3 = Library.Theme.Text
         TabBtn.Font = Enum.Font.GothamSemibold
         TabBtn.TextSize = 14
-        TabBtn.ZIndex = 10002
         applyGlassEffect(TabBtn, 6, 0.6, 0.8)
         TabBtn.Parent = TabScroll
 
@@ -225,7 +210,6 @@ function Library:CreateWindow(title)
         Page.BackgroundTransparency = 1
         Page.ScrollBarThickness = 2
         Page.ScrollBarImageColor3 = Library.Theme.Accent
-        Page.ZIndex = 10002
         Page.Parent = PageContainer
 
         local PageList = Instance.new("UIListLayout")
@@ -263,7 +247,6 @@ function Library:CreateWindow(title)
             Label.TextColor3 = Library.Theme.Text
             Label.TextSize = 14
             Label.TextXAlignment = Enum.TextXAlignment.Left
-            Label.ZIndex = 10003
             Label.Parent = Page
             
             local LabelObj = {}
@@ -280,7 +263,6 @@ function Library:CreateWindow(title)
             Btn.Font = Enum.Font.Gotham
             Btn.TextColor3 = Library.Theme.Text
             Btn.TextSize = 14
-            Btn.ZIndex = 10003
             applyGlassEffect(Btn, 6, 0.5, 0.7)
             Btn.Parent = Page
             Btn.MouseButton1Click:Connect(callback)
@@ -291,7 +273,6 @@ function Library:CreateWindow(title)
             
             local SliderFrame = Instance.new("Frame")
             SliderFrame.Size = UDim2.new(1, -10, 0, 55)
-            SliderFrame.ZIndex = 10003
             applyGlassEffect(SliderFrame, 6, 0.5, 0.7)
             SliderFrame.Parent = Page
 
@@ -304,7 +285,6 @@ function Library:CreateWindow(title)
             Title.TextColor3 = Library.Theme.Text
             Title.TextSize = 14
             Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.ZIndex = 10004
             Title.Parent = SliderFrame
 
             local ValLabel = Instance.new("TextLabel")
@@ -316,7 +296,6 @@ function Library:CreateWindow(title)
             ValLabel.TextColor3 = Library.Theme.Accent
             ValLabel.TextSize = 14
             ValLabel.TextXAlignment = Enum.TextXAlignment.Right
-            ValLabel.ZIndex = 10004
             ValLabel.Parent = SliderFrame
 
             local SliderBack = Instance.new("Frame")
@@ -324,7 +303,6 @@ function Library:CreateWindow(title)
             SliderBack.Position = UDim2.new(0, 10, 0, 38)
             SliderBack.BackgroundColor3 = Library.Theme.Secondary
             SliderBack.BorderSizePixel = 0
-            SliderBack.ZIndex = 10004
             SliderBack.Parent = SliderFrame
             Instance.new("UICorner", SliderBack).CornerRadius = UDim.new(0, 4)
 
@@ -332,7 +310,6 @@ function Library:CreateWindow(title)
             SliderFill.Size = UDim2.new((Library.Flags[flag] - min) / (max - min), 0, 1, 0)
             SliderFill.BackgroundColor3 = Library.Theme.Accent
             SliderFill.BorderSizePixel = 0
-            SliderFill.ZIndex = 10005
             SliderFill.Parent = SliderBack
             Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 4)
 
@@ -372,7 +349,6 @@ function Library:CreateWindow(title)
             Library.Flags[flag] = default or ""
             local BoxFrame = Instance.new("Frame")
             BoxFrame.Size = UDim2.new(1, -10, 0, 45)
-            BoxFrame.ZIndex = 10003
             applyGlassEffect(BoxFrame, 6, 0.5, 0.7)
             BoxFrame.Parent = Page
 
@@ -386,7 +362,6 @@ function Library:CreateWindow(title)
             Box.TextColor3 = Library.Theme.Text
             Box.TextSize = 14
             Box.TextXAlignment = Enum.TextXAlignment.Left
-            Box.ZIndex = 10004
             Box.Parent = BoxFrame
 
             Library.Elements[flag] = {Type = "TextBox", Box = Box}
@@ -406,7 +381,6 @@ function Library:CreateWindow(title)
             Toggle.TextColor3 = Library.Theme.Text
             Toggle.TextSize = 14
             Toggle.TextXAlignment = Enum.TextXAlignment.Left
-            Toggle.ZIndex = 10003
             applyGlassEffect(Toggle, 6, 0.5, 0.7)
             Toggle.Parent = Page
 
@@ -415,7 +389,6 @@ function Library:CreateWindow(title)
             Ind.Position = UDim2.new(1, -34, 0.5, -12)
             applyGlassEffect(Ind, 4, 0.2, 0.5)
             Ind.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
-            Ind.ZIndex = 10004
             Ind.Parent = Toggle
 
             Library.Elements[flag] = {Type = "Toggle", Indicator = Ind}
@@ -437,7 +410,6 @@ function Library:CreateWindow(title)
             Bind.TextColor3 = Library.Theme.Text
             Bind.TextSize = 14
             Bind.TextXAlignment = Enum.TextXAlignment.Left
-            Bind.ZIndex = 10003
             applyGlassEffect(Bind, 6, 0.5, 0.7)
             Bind.Parent = Page
 
@@ -447,7 +419,6 @@ function Library:CreateWindow(title)
             Lbl.Text = Library.Flags[flag]
             Lbl.Font = Enum.Font.GothamBold
             Lbl.TextColor3 = Library.Theme.Accent
-            Lbl.ZIndex = 10004
             applyGlassEffect(Lbl, 4, 0.3, 0.5)
             Lbl.Parent = Bind
 
@@ -476,7 +447,6 @@ function Library:CreateWindow(title)
             local Drop = Instance.new("Frame")
             Drop.Size = UDim2.new(1, -10, 0, 45)
             Drop.ClipsDescendants = true
-            Drop.ZIndex = 10003
             applyGlassEffect(Drop, 6, 0.5, 0.7)
             Drop.Parent = Page
 
@@ -488,14 +458,12 @@ function Library:CreateWindow(title)
             Btn.TextSize = 14
             Btn.BackgroundTransparency = 1
             Btn.TextXAlignment = Enum.TextXAlignment.Left
-            Btn.ZIndex = 10004
             Btn.Parent = Drop
 
             local Container = Instance.new("Frame")
             Container.Size = UDim2.new(1, 0, 0, #list * itemHeight)
             Container.Position = UDim2.new(0, 0, 0, 45)
             Container.BackgroundTransparency = 1
-            Container.ZIndex = 10004
             Container.Parent = Drop
             Instance.new("UIListLayout", Container)
 
@@ -515,7 +483,6 @@ function Library:CreateWindow(title)
                 Item.Font = Enum.Font.Gotham
                 Item.TextColor3 = Color3.fromRGB(180, 180, 180)
                 Item.BackgroundTransparency = 1
-                Item.ZIndex = 10005
                 Item.Parent = Container
                 Item.MouseButton1Click:Connect(function()
                     Library.Flags[flag] = v
