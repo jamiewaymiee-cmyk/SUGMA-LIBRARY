@@ -1,539 +1,366 @@
-local Library = {
-    Flags = {},
-    Elements = {}, -- Tracks UI elements so they can be updated
-    Theme = {
-        Accent = Color3.fromRGB(80, 120, 255),
-        Background = Color3.fromRGB(15, 15, 20),
-        Text = Color3.fromRGB(255, 255, 255),
-        Secondary = Color3.fromRGB(45, 45, 50)
-    },
-    ToggleKey = Enum.KeyCode.RightShift,
-    Opened = true,
-    Notifications = nil
-}
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/jamiewaymiee-cmyk/SUGMA-LIBRARY/refs/heads/main/SUGMAHACKS", true))()
 
-local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 
--- Helper: Glass Styling
-local function applyGlassEffect(guiObject, radius, transparency, strokeTransparency)
-    guiObject.BackgroundColor3 = Library.Theme.Background
-    guiObject.BackgroundTransparency = transparency or 0.4
-    guiObject.BorderSizePixel = 0
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, radius or 8)
-    corner.Parent = guiObject
-    
-    if strokeTransparency then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(255, 255, 255)
-        stroke.Transparency = strokeTransparency
-        stroke.Thickness = 1
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Parent = guiObject
-    end
-end
+-- [ LOCAL PLAYER ]
+local Player = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
--- Update System: Updates a specific flag or ALL flags
-function Library:Update(targetFlag)
-    local function refresh(flag)
-        local data = self.Elements[flag]
-        if not data then return end
-        
-        if data.Type == "Toggle" then
-            data.Indicator.BackgroundColor3 = self.Flags[flag] and self.Theme.Accent or self.Theme.Secondary
-        elseif data.Type == "Dropdown" then
-            data.Button.Text = "    " .. data.Title .. " : " .. tostring(self.Flags[flag])
-        elseif data.Type == "Keybind" then
-            data.Label.Text = tostring(self.Flags[flag])
-        elseif data.Type == "TextBox" then
-            data.Box.Text = tostring(self.Flags[flag])
-        elseif data.Type == "Slider" then
-            local percent = math.clamp((self.Flags[flag] - data.Min) / (data.Max - data.Min), 0, 1)
-            data.Fill.Size = UDim2.new(percent, 0, 1, 0)
-            data.ValLabel.Text = tostring(self.Flags[flag])
+-- ==================== CONFIGURATION ====================
+
+-- Aimbot Settings
+local AimbotEnabled = false
+local AimPart = "Head"
+local FOVRadius = 300
+local ShowFOV = true
+local Smoothness = 8
+local DeadZone = 5
+
+-- ESP Settings
+local ESP_ENABLED = false
+local ESP_OBJECTS = {}
+
+-- Shared Scanning
+local SCAN_INTERVAL = 0.5
+local ValidTargets = {} -- Shared table for both ESP and Aimbot
+
+-- Visuals Settings
+local FullbrightEnabled = false
+local TimeChangerValue = 12
+
+-- Aimbot Runtime
+local Target = nil
+local IsAiming = false
+local LastTarget = nil
+local LockTime = 0
+
+-- [ DRAWING: FOV CIRCLE ]
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.fromRGB(255, 0, 127)
+FOVCircle.Filled = false
+FOVCircle.Radius = FOVRadius
+FOVCircle.Visible = false
+FOVCircle.Transparency = 1
+
+-- ==================== HELPER FUNCTIONS ====================
+
+-- Checks if a model is a valid living target based on BallSocketConstraints
+local function IsValidTarget(model)
+    if not model or not model.Parent then return false end
+    if model.Name ~= "Male" then return false end
+    
+    -- 1. Check for Body Parts (Essential)
+    local head = model:FindFirstChild("Head")
+    local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart")
+    
+    if not head or not root then return false end
+
+    -- 2. THE CUSTOM DEATH CHECK
+    -- We scan the model. If we find a BallSocketConstraint, they are ALIVE.
+    -- If we loop through everything and find nothing, they are DEAD.
+    local hasJoints = false
+    
+    -- We use GetDescendants because the joints might be inside specific parts
+    for _, obj in ipairs(model:GetDescendants()) do
+        if obj:IsA("BallSocketConstraint") then
+            hasJoints = true
+            break -- Found one, no need to keep searching
         end
     end
 
-    if targetFlag then
-        refresh(targetFlag)
+    if not hasJoints then
+        return false -- No joints found -> Confirmed Dead
+    end
+
+    return true -- Has joints -> Confirmed Alive
+end
+
+local function isRightClickHeld()
+    return UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+end
+
+-- ==================== ESP FUNCTIONS ====================
+
+local function clearESP()
+	for _, data in pairs(ESP_OBJECTS) do
+		if data.Highlight then data.Highlight:Destroy() end
+		if data.Billboard then data.Billboard:Destroy() end
+	end
+	table.clear(ESP_OBJECTS)
+end
+
+local function updateESP()
+    -- Sync ESP with ValidTargets table
+    if not ESP_ENABLED then return end
+
+    -- Remove invalid/dead ESP
+    for model, data in pairs(ESP_OBJECTS) do
+        -- If target is no longer in ValidTargets or check fails
+        if not IsValidTarget(model) then
+            if data.Highlight then data.Highlight:Destroy() end
+            if data.Billboard then data.Billboard:Destroy() end
+            ESP_OBJECTS[model] = nil
+        end
+    end
+
+    -- Add new ESP
+    for _, model in ipairs(ValidTargets) do
+        if not ESP_OBJECTS[model] then
+            local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart")
+            if root then
+                local highlight = Instance.new("Highlight")
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                highlight.FillTransparency = 0.6
+                highlight.OutlineTransparency = 0
+                highlight.Adornee = model
+                highlight.Parent = model
+
+                local billboard = Instance.new("BillboardGui")
+                billboard.Size = UDim2.new(0, 100, 0, 40)
+                billboard.StudsOffset = Vector3.new(0, 3, 0)
+                billboard.AlwaysOnTop = true
+                billboard.Adornee = root
+                billboard.Parent = model
+
+                local text = Instance.new("TextLabel")
+                text.Size = UDim2.new(0.5, 0, 0.5, 0)
+                text.BackgroundTransparency = 1
+                text.TextColor3 = Color3.new(1, 1, 1)
+                text.TextStrokeTransparency = 0
+                text.TextScaled = true
+                text.Font = Enum.Font.SourceSansBold
+                text.Text = "0 studs"
+                text.Parent = billboard
+
+                ESP_OBJECTS[model] = {
+                    Highlight = highlight,
+                    Billboard = billboard,
+                    Label = text,
+                    Root = root
+                }
+            end
+        end
+    end
+end
+
+-- ==================== AIMBOT FUNCTIONS ====================
+
+local function getClosestTarget()
+    local closestPart = nil
+    local shortestDistance = FOVRadius
+    local mousePos = UserInputService:GetMouseLocation()
+    local centerScreen = Camera.ViewportSize / 2
+
+    -- Sticky targeting (Keeps locked on until dead or key released)
+    if LastTarget and LastTarget.Parent and IsValidTarget(LastTarget.Parent) then
+        local pos, onScreen = Camera:WorldToViewportPoint(LastTarget.Position)
+        if onScreen then
+            local distanceFromMouse = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+            -- If target is still relatively close to mouse, stick to it
+            if distanceFromMouse <= FOVRadius * 1.5 then
+                return LastTarget
+            end
+        end
+    end
+
+    -- Find new target from ValidTargets table
+    for _, model in ipairs(ValidTargets) do
+        local part = model:FindFirstChild(AimPart)
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local distanceFromCenter = (Vector2.new(pos.X, pos.Y) - centerScreen).Magnitude
+                if distanceFromCenter < shortestDistance then
+                    closestPart = part
+                    shortestDistance = distanceFromCenter
+                end
+            end
+        end
+    end
+    
+    return closestPart
+end
+
+local function moveMouseToTarget(targetPos, deltaTime)
+    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+    
+    if not onScreen then return end
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
+    
+    local delta = targetScreen - mousePos
+    local distance = delta.Magnitude
+    
+    if distance < DeadZone then return end
+    
+    local smoothFactor = math.min(1, (deltaTime * 60) / Smoothness)
+    local moveAmount = delta * smoothFactor
+    
+    if moveAmount.Magnitude > distance then
+        moveAmount = delta
+    end
+    
+    if mousemoverel then
+        mousemoverel(moveAmount.X, moveAmount.Y)
+    elseif mousemoveabs then
+        local newPos = mousePos + moveAmount
+        mousemoveabs(newPos.X, newPos.Y)
+    end
+end
+
+-- ==================== UI CREATION ====================
+
+local MainGui = Library:CreateWindow("SugmaHacks - PD Edition")
+
+-- [ TAB 1: AIMBOT ]
+local CombatElements = MainGui:CreateTab("Aimbot")
+
+CombatElements:CreateToggle("Aimbot Enabled", "AimbotToggle", false, function(state) 
+    AimbotEnabled = state 
+end)
+
+CombatElements:CreateDropdown("Aim Part", "AimPartDrop", {"Head", "Root"}, function(val) 
+    AimPart = val 
+end)
+
+CombatElements:CreateSlider("FOV Radius", "FOVRad", 50, 800, 300, function(val) 
+    FOVRadius = val 
+end)
+
+CombatElements:CreateToggle("Show FOV Circle", "ShowFOVToggle", false, function(state) 
+    ShowFOV = state 
+end)
+
+CombatElements:CreateSlider("Smoothness", "SmoothVal", 1, 20, 8, function(val) 
+    Smoothness = val 
+end)
+
+CombatElements:CreateSlider("DeadZone", "DeadZoneVal", 1, 20, 5, function(val) 
+    DeadZone = val 
+end)
+
+-- [ TAB 2: ESP ]
+local ESPElements = MainGui:CreateTab("ESP")
+
+ESPElements:CreateToggle("Male ESP", "MaleESP", false, function(state) 
+    ESP_ENABLED = state
+    if not state then 
+        clearESP() 
+    end
+end)
+
+-- [ TAB 3: VISUALS ]
+local VisualElements = MainGui:CreateTab("Visuals")
+
+VisualElements:CreateToggle("Fullbright", "Fullbright", false, function(state) 
+    FullbrightEnabled = state 
+end)
+
+VisualElements:CreateSlider("Time Changer", "TimeVal", 0, 24, 12, function(val) 
+    TimeChangerValue = val 
+end)
+
+MainGui:CreateConfigTab()
+
+-- ==================== BACKGROUND LOOPS ====================
+
+-- UNIFIED SCANNING LOOP
+-- This scans Workspace for valid (LIVING) players and updates the table used by BOTH ESP and Aimbot.
+task.spawn(function()
+    while true do
+        local tempTargets = {}
+        -- Using GetChildren to match ESP logic and reduce lag
+        for _, obj in ipairs(Workspace:GetChildren()) do
+            if IsValidTarget(obj) then
+                table.insert(tempTargets, obj)
+            end
+        end
+        ValidTargets = tempTargets
+        
+        if ESP_ENABLED then
+            updateESP()
+        end
+        
+        task.wait(SCAN_INTERVAL)
+    end
+end)
+
+-- ==================== MAIN RENDER LOOP ====================
+
+local lastFrameTime = tick()
+
+RunService.RenderStepped:Connect(function()
+    local currentTime = tick()
+    local deltaTime = currentTime - lastFrameTime
+    lastFrameTime = currentTime
+    
+    -- Sync Lib Values
+    if Library.Flags["FOVRad"] then FOVRadius = Library.Flags["FOVRad"] end
+    if Library.Flags["SmoothVal"] then Smoothness = Library.Flags["SmoothVal"] end
+    
+    -- ========== VISUALS ==========
+    if FullbrightEnabled then
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 2
+        Lighting.GlobalShadows = false
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
     else
-        for flag, _ in pairs(self.Elements) do
-            refresh(flag)
-        end
-    end
-end
-
--- Notification System
-function Library:Notify(title, content, duration)
-    if not self.Notifications then
-        local NotifyGui = Instance.new("ScreenGui")
-        NotifyGui.Name = "LiquidNotifications"
-        NotifyGui.Parent = player:WaitForChild("PlayerGui")
-        
-        local Holder = Instance.new("Frame")
-        Holder.Size = UDim2.new(0, 300, 1, -20)
-        Holder.Position = UDim2.new(1, -310, 0, 10)
-        Holder.BackgroundTransparency = 1
-        Holder.Parent = NotifyGui
-        
-        local List = Instance.new("UIListLayout")
-        List.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        List.Padding = UDim.new(0, 10)
-        List.Parent = Holder
-        self.Notifications = Holder
+        Lighting.ClockTime = TimeChangerValue
+        Lighting.GlobalShadows = true
     end
     
-    local Notif = Instance.new("Frame")
-    Notif.Size = UDim2.new(1, 0, 0, 80)
-    Notif.ClipsDescendants = true
-    applyGlassEffect(Notif, 8, 0.2, 0.7)
-    Notif.Parent = self.Notifications
+    -- ========== AIMBOT ==========
+    FOVCircle.Visible = ShowFOV and AimbotEnabled
+    FOVCircle.Radius = FOVRadius
+    FOVCircle.Position = UserInputService:GetMouseLocation()
     
-    local T = Instance.new("TextLabel")
-    T.Size = UDim2.new(1, -10, 0, 25)
-    T.Position = UDim2.new(0, 10, 0, 5)
-    T.Text = title
-    T.Font = Enum.Font.GothamBold
-    T.TextColor3 = Library.Theme.Accent
-    T.TextSize = 14
-    T.TextXAlignment = Enum.TextXAlignment.Left
-    T.BackgroundTransparency = 1
-    T.Parent = Notif
+    IsAiming = AimbotEnabled and isRightClickHeld()
     
-    local B = Instance.new("TextLabel")
-    B.Size = UDim2.new(1, -20, 0, 45)
-    B.Position = UDim2.new(0, 10, 0, 25)
-    B.Text = content
-    B.Font = Enum.Font.Gotham
-    B.TextColor3 = Library.Theme.Text
-    B.TextSize = 13
-    B.TextWrapped = true
-    B.TextXAlignment = Enum.TextXAlignment.Left
-    B.BackgroundTransparency = 1
-    B.Parent = Notif
-
-    task.delay(duration or 5, function()
-        TweenService:Create(Notif, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(T, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        TweenService:Create(B, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        task.wait(0.5)
-        Notif:Destroy()
-    end)
-end
-
-function Library:CreateWindow(title)
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "LiquidUI"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = player:WaitForChild("PlayerGui")
-    self.ScreenGui = ScreenGui
-
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == self.ToggleKey then
-            self.Opened = not self.Opened
-            ScreenGui.Enabled = self.Opened
-        end
-    end)
-
-    local Main = Instance.new("Frame")
-    Main.Name = "Main"
-    Main.Size = UDim2.new(0, 650, 0, 500)
-    Main.Position = UDim2.new(0.5, -325, 0.5, -250)
-    applyGlassEffect(Main, 12, 0.2, 0.6)
-    Main.Parent = ScreenGui
-
-    local dragging, dragStart, startPos
-    Main.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; dragStart = input.Position; startPos = Main.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
-            local delta = input.Position - dragStart
-            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
-
-    local TopBar = Instance.new("Frame")
-    TopBar.Size = UDim2.new(1, 0, 0, 45)
-    applyGlassEffect(TopBar, 12, 0.4, nil)
-    TopBar.Parent = Main
-
-    local Title = Instance.new("TextLabel")
-    Title.Text = "  " .. (title or "Liquid Library")
-    Title.Size = UDim2.new(1, 0, 1, 0)
-    Title.BackgroundTransparency = 1
-    Title.TextColor3 = Library.Theme.Text
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 18
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Parent = TopBar
-
-    local TabScroll = Instance.new("ScrollingFrame")
-    TabScroll.Size = UDim2.new(0, 150, 1, -55)
-    TabScroll.Position = UDim2.new(0, 8, 0, 50)
-    TabScroll.BackgroundTransparency = 1
-    TabScroll.ScrollBarThickness = 0
-    TabScroll.Parent = Main
-    Instance.new("UIListLayout", TabScroll).Padding = UDim.new(0, 5)
-
-    local PageContainer = Instance.new("Frame")
-    PageContainer.Size = UDim2.new(1, -175, 1, -55)
-    PageContainer.Position = UDim2.new(0, 165, 0, 50)
-    PageContainer.BackgroundTransparency = 1
-    PageContainer.Parent = Main
-
-    local Window = { CurrentTab = nil }
-
-    function Window:CreateTab(name)
-        local TabBtn = Instance.new("TextButton")
-        TabBtn.Size = UDim2.new(1, -5, 0, 40)
-        TabBtn.Text = name
-        TabBtn.TextColor3 = Library.Theme.Text
-        TabBtn.Font = Enum.Font.GothamSemibold
-        TabBtn.TextSize = 14
-        applyGlassEffect(TabBtn, 6, 0.6, 0.8)
-        TabBtn.Parent = TabScroll
-
-        local Page = Instance.new("ScrollingFrame")
-        Page.Size = UDim2.new(1, 0, 1, 0)
-        Page.Visible = false
-        Page.BackgroundTransparency = 1
-        Page.ScrollBarThickness = 2
-        Page.ScrollBarImageColor3 = Library.Theme.Accent
-        Page.Parent = PageContainer
-
-        local PageList = Instance.new("UIListLayout")
-        PageList.Padding = UDim.new(0, 8)
-        PageList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        PageList.Parent = Page
+    if IsAiming then
+        local targetPart = getClosestTarget()
         
-        PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
-        end)
-
-        TabBtn.MouseButton1Click:Connect(function()
-            for _, p in pairs(PageContainer:GetChildren()) do p.Visible = false end
-            for _, b in pairs(TabScroll:GetChildren()) do 
-                if b:IsA("TextButton") then b.BackgroundColor3 = Library.Theme.Background end
+        -- Double check target is still valid/alive before aiming
+        if targetPart and targetPart.Parent and IsValidTarget(targetPart.Parent) then
+            Target = targetPart
+            LastTarget = targetPart
+            LockTime = currentTime
+            FOVCircle.Color = Color3.fromRGB(0, 255, 0)
+            moveMouseToTarget(targetPart.Position, deltaTime)
+        else
+            -- Release lock if target dies or is lost
+            if currentTime - LockTime > 0.2 then
+                Target = nil
+                LastTarget = nil
             end
-            Page.Visible = true
-            TabBtn.BackgroundColor3 = Library.Theme.Accent
-        end)
-
-        if not Window.CurrentTab then
-            Page.Visible = true
-            TabBtn.BackgroundColor3 = Library.Theme.Accent
-            Window.CurrentTab = name
+            FOVCircle.Color = Color3.fromRGB(255, 0, 127)
         end
-
-        local Elements = {}
-
-        function Elements:CreateLabel(text)
-            local Label = Instance.new("TextLabel")
-            Label.Size = UDim2.new(1, -10, 0, 30)
-            Label.BackgroundTransparency = 1
-            Label.Text = "    " .. text
-            Label.Font = Enum.Font.GothamSemibold
-            Label.TextColor3 = Library.Theme.Text
-            Label.TextSize = 14
-            Label.TextXAlignment = Enum.TextXAlignment.Left
-            Label.Parent = Page
-            
-            local LabelObj = {}
-            function LabelObj:Set(newText)
-                Label.Text = "    " .. newText
-            end
-            return LabelObj
-        end
-
-        function Elements:CreateButton(text, callback)
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, -10, 0, 45)
-            Btn.Text = text
-            Btn.Font = Enum.Font.Gotham
-            Btn.TextColor3 = Library.Theme.Text
-            Btn.TextSize = 14
-            applyGlassEffect(Btn, 6, 0.5, 0.7)
-            Btn.Parent = Page
-            Btn.MouseButton1Click:Connect(callback)
-        end
-
-        function Elements:CreateSlider(text, flag, min, max, default, callback)
-            Library.Flags[flag] = default or min
-            
-            local SliderFrame = Instance.new("Frame")
-            SliderFrame.Size = UDim2.new(1, -10, 0, 55)
-            applyGlassEffect(SliderFrame, 6, 0.5, 0.7)
-            SliderFrame.Parent = Page
-
-            local Title = Instance.new("TextLabel")
-            Title.Size = UDim2.new(1, -20, 0, 25)
-            Title.Position = UDim2.new(0, 10, 0, 5)
-            Title.BackgroundTransparency = 1
-            Title.Text = text
-            Title.Font = Enum.Font.Gotham
-            Title.TextColor3 = Library.Theme.Text
-            Title.TextSize = 14
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = SliderFrame
-
-            local ValLabel = Instance.new("TextLabel")
-            ValLabel.Size = UDim2.new(0, 40, 0, 25)
-            ValLabel.Position = UDim2.new(1, -50, 0, 5)
-            ValLabel.BackgroundTransparency = 1
-            ValLabel.Text = tostring(Library.Flags[flag])
-            ValLabel.Font = Enum.Font.GothamBold
-            ValLabel.TextColor3 = Library.Theme.Accent
-            ValLabel.TextSize = 14
-            ValLabel.TextXAlignment = Enum.TextXAlignment.Right
-            ValLabel.Parent = SliderFrame
-
-            local SliderBack = Instance.new("Frame")
-            SliderBack.Size = UDim2.new(1, -20, 0, 6)
-            SliderBack.Position = UDim2.new(0, 10, 0, 38)
-            SliderBack.BackgroundColor3 = Library.Theme.Secondary
-            SliderBack.BorderSizePixel = 0
-            SliderBack.Parent = SliderFrame
-            Instance.new("UICorner", SliderBack).CornerRadius = UDim.new(0, 4)
-
-            local SliderFill = Instance.new("Frame")
-            SliderFill.Size = UDim2.new((Library.Flags[flag] - min) / (max - min), 0, 1, 0)
-            SliderFill.BackgroundColor3 = Library.Theme.Accent
-            SliderFill.BorderSizePixel = 0
-            SliderFill.Parent = SliderBack
-            Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 4)
-
-            Library.Elements[flag] = {Type = "Slider", Fill = SliderFill, ValLabel = ValLabel, Min = min, Max = max}
-
-            local function move()
-                local mousePos = UserInputService:GetMouseLocation().X
-                local framePos = SliderBack.AbsolutePosition.X
-                local frameSize = SliderBack.AbsoluteSize.X
-                local percent = math.clamp((mousePos - framePos) / frameSize, 0, 1)
-                local value = math.floor(min + (max - min) * percent)
-                
-                Library.Flags[flag] = value
-                SliderFill.Size = UDim2.new(percent, 0, 1, 0)
-                ValLabel.Text = tostring(value)
-                if callback then callback(value) end
-            end
-
-            SliderFrame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local moveConn
-                    moveConn = UserInputService.InputChanged:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseMovement then move() end
-                    end)
-                    move()
-                    UserInputService.InputEnded:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseButton1 and moveConn then
-                            moveConn:Disconnect()
-                            moveConn = nil
-                        end
-                    end)
-                end
-            end)
-        end
-
-        function Elements:CreateTextBox(text, flag, default, callback)
-            Library.Flags[flag] = default or ""
-            local BoxFrame = Instance.new("Frame")
-            BoxFrame.Size = UDim2.new(1, -10, 0, 45)
-            applyGlassEffect(BoxFrame, 6, 0.5, 0.7)
-            BoxFrame.Parent = Page
-
-            local Box = Instance.new("TextBox")
-            Box.Size = UDim2.new(1, -20, 1, 0)
-            Box.Position = UDim2.new(0, 10, 0, 0)
-            Box.BackgroundTransparency = 1
-            Box.Text = Library.Flags[flag]
-            Box.PlaceholderText = text
-            Box.Font = Enum.Font.Gotham
-            Box.TextColor3 = Library.Theme.Text
-            Box.TextSize = 14
-            Box.TextXAlignment = Enum.TextXAlignment.Left
-            Box.Parent = BoxFrame
-
-            Library.Elements[flag] = {Type = "TextBox", Box = Box}
-
-            Box.FocusLost:Connect(function()
-                Library.Flags[flag] = Box.Text
-                if callback then callback(Box.Text) end
-            end)
-        end
-
-        function Elements:CreateToggle(text, flag, default, callback)
-            Library.Flags[flag] = default or false
-            local Toggle = Instance.new("TextButton")
-            Toggle.Size = UDim2.new(1, -10, 0, 45)
-            Toggle.Text = "   " .. text
-            Toggle.Font = Enum.Font.Gotham
-            Toggle.TextColor3 = Library.Theme.Text
-            Toggle.TextSize = 14
-            Toggle.TextXAlignment = Enum.TextXAlignment.Left
-            applyGlassEffect(Toggle, 6, 0.5, 0.7)
-            Toggle.Parent = Page
-
-            local Ind = Instance.new("Frame")
-            Ind.Size = UDim2.new(0, 24, 0, 24)
-            Ind.Position = UDim2.new(1, -34, 0.5, -12)
-            applyGlassEffect(Ind, 4, 0.2, 0.5)
-            Ind.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
-            Ind.Parent = Toggle
-
-            Library.Elements[flag] = {Type = "Toggle", Indicator = Ind}
-
-            Toggle.MouseButton1Click:Connect(function()
-                Library.Flags[flag] = not Library.Flags[flag]
-                Library:Update(flag)
-                if callback then callback(Library.Flags[flag]) end
-            end)
-        end
-
-        function Elements:CreateKeybind(text, flag, default, callback)
-            Library.Flags[flag] = default.Name
-            local binding = false
-            local Bind = Instance.new("TextButton")
-            Bind.Size = UDim2.new(1, -10, 0, 45)
-            Bind.Text = "   " .. text
-            Bind.Font = Enum.Font.Gotham
-            Bind.TextColor3 = Library.Theme.Text
-            Bind.TextSize = 14
-            Bind.TextXAlignment = Enum.TextXAlignment.Left
-            applyGlassEffect(Bind, 6, 0.5, 0.7)
-            Bind.Parent = Page
-
-            local Lbl = Instance.new("TextLabel")
-            Lbl.Size = UDim2.new(0, 80, 0, 26)
-            Lbl.Position = UDim2.new(1, -90, 0.5, -13)
-            Lbl.Text = Library.Flags[flag]
-            Lbl.Font = Enum.Font.GothamBold
-            Lbl.TextColor3 = Library.Theme.Accent
-            applyGlassEffect(Lbl, 4, 0.3, 0.5)
-            Lbl.Parent = Bind
-
-            Library.Elements[flag] = {Type = "Keybind", Label = Lbl}
-
-            Bind.MouseButton1Click:Connect(function()
-                binding = true
-                Lbl.Text = "..."
-            end)
-
-            UserInputService.InputBegan:Connect(function(input)
-                if binding and input.UserInputType == Enum.UserInputType.Keyboard then
-                    Library.Flags[flag] = input.KeyCode.Name
-                    Library:Update(flag)
-                    binding = false
-                elseif not binding and input.KeyCode.Name == Library.Flags[flag] then
-                    if callback then callback() end
-                end
-            end)
-        end
-
-        function Elements:CreateDropdown(text, flag, list, callback)
-            Library.Flags[flag] = list[1]
-            local itemHeight = 35
-
-            local Drop = Instance.new("Frame")
-            Drop.Size = UDim2.new(1, -10, 0, 45)
-            Drop.ClipsDescendants = true
-            applyGlassEffect(Drop, 6, 0.5, 0.7)
-            Drop.Parent = Page
-
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, 0, 0, 45)
-            Btn.Text = "   " .. text .. " : " .. Library.Flags[flag]
-            Btn.Font = Enum.Font.Gotham
-            Btn.TextColor3 = Library.Theme.Text
-            Btn.TextSize = 14
-            Btn.BackgroundTransparency = 1
-            Btn.TextXAlignment = Enum.TextXAlignment.Left
-            Btn.Parent = Drop
-
-            local Container = Instance.new("Frame")
-            Container.Size = UDim2.new(1, 0, 0, #list * itemHeight)
-            Container.Position = UDim2.new(0, 0, 0, 45)
-            Container.BackgroundTransparency = 1
-            Container.Parent = Drop
-            Instance.new("UIListLayout", Container)
-
-            Library.Elements[flag] = {Type = "Dropdown", Button = Btn, Title = text}
-
-            local open = false
-            Btn.MouseButton1Click:Connect(function()
-                open = not open
-                Drop.Size = open and UDim2.new(1, -10, 0, 45 + (#list * itemHeight)) or UDim2.new(1, -10, 0, 45)
-                Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
-            end)
-
-            for _, v in pairs(list) do
-                local Item = Instance.new("TextButton")
-                Item.Size = UDim2.new(1, 0, 0, itemHeight)
-                Item.Text = v
-                Item.Font = Enum.Font.Gotham
-                Item.TextColor3 = Color3.fromRGB(180, 180, 180)
-                Item.BackgroundTransparency = 1
-                Item.Parent = Container
-                Item.MouseButton1Click:Connect(function()
-                    Library.Flags[flag] = v
-                    Library:Update(flag)
-                    open = false
-                    Drop.Size = UDim2.new(1, -10, 0, 45)
-                    if callback then callback(v) end
-                end)
-            end
-        end
-
-        return Elements
+    else
+        FOVCircle.Color = Color3.fromRGB(255, 0, 127)
     end
-
-    function Window:CreateConfigTab()
-        local Tab = self:CreateTab("Settings")
-        Tab:CreateTextBox("Config Name...", "ConfigName", "DefaultConfig")
-
-        Tab:CreateButton("Save Config", function()
-            if writefile then
-                local name = Library.Flags["ConfigName"] .. ".json"
-                writefile(name, HttpService:JSONEncode(Library.Flags))
-                Library:Notify("Config", "Saved to " .. name, 3)
+    
+    -- ========== ESP DISTANCE UPDATE ==========
+	if ESP_ENABLED then
+		local camPos = Camera.CFrame.Position
+		for model, data in pairs(ESP_OBJECTS) do
+            -- If model became invalid (lost sockets/dead) mid-frame, remove it
+            if not IsValidTarget(model) then
+                if data.Highlight then data.Highlight:Destroy() end
+                if data.Billboard then data.Billboard:Destroy() end
+                ESP_OBJECTS[model] = nil
             else
-                Library:Notify("Error", "Your executor does not support writefile.", 3)
+                local dist = (camPos - data.Root.Position).Magnitude
+                data.Label.Text = math.floor(dist) .. " studs"
             end
-        end)
+		end
+	end
+end)
 
-        Tab:CreateButton("Load Config", function()
-            local name = Library.Flags["ConfigName"] .. ".json"
-            if isfile and isfile(name) then
-                local success, result = pcall(function() return HttpService:JSONDecode(readfile(name)) end)
-                if success and type(result) == "table" then
-                    for key, val in pairs(result) do Library.Flags[key] = val end
-                    Library:Update()
-                    Library:Notify("Config", "Successfully loaded " .. name, 3)
-                else
-                    Library:Notify("Error", "Failed to parse config file.", 3)
-                end
-            else
-                Library:Notify("Error", "File not found!", 3)
-            end
-        end)
-
-        Tab:CreateButton("Destroy UI", function()
-            Library.ScreenGui:Destroy()
-            if Library.Notifications then Library.Notifications.Parent:Destroy() end
-        end)
-    end
-
-    return Window
-end
-
-return Library
+Library:Notify("SugmaHacks", "loaded", 5)
