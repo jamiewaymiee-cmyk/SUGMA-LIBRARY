@@ -73,6 +73,8 @@ function Library:Notify(title, content, duration)
     if not self.Notifications then
         local NotifyGui = Instance.new("ScreenGui")
         NotifyGui.Name = "LiquidNotifications"
+        -- SET HIGH DISPLAY ORDER TO OVERLAP EVERYTHING
+        NotifyGui.DisplayOrder = 10005 
         NotifyGui.Parent = player:WaitForChild("PlayerGui")
         
         local Holder = Instance.new("Frame")
@@ -129,6 +131,8 @@ end
 function Library:CreateWindow(title)
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "LiquidUI"
+    -- SET HIGH DISPLAY ORDER TO OVERLAP EVERYTHING
+    ScreenGui.DisplayOrder = 10000 
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = player:WaitForChild("PlayerGui")
     self.ScreenGui = ScreenGui
