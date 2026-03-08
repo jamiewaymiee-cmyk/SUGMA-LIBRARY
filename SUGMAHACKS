@@ -125,6 +125,7 @@ function Library:CreateWindow(t)
     end)
 
     local m = Instance.new("Frame")
+    m.Name = "Main"
     m.Size = UDim2.new(0, 650, 0, 500)
     m.Position = UDim2.new(0.5, -325, 0.5, -250)
     applyGlassEffect(m, 12, 0.2, 0.6)
@@ -133,8 +134,14 @@ function Library:CreateWindow(t)
     local dr, ds, sp
     m.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            local obj = sg:GetGuiObjectsAtPosition(i.Position.X, i.Position.Y)[1]
-            if obj == m or obj.Parent == m then
+            local obj = game:GetService("GuiService"):GetGuiObjectsAtPosition(i.Position.X, i.Position.Y)
+            local isInteractable = false
+            for _, o in pairs(obj) do
+                if o:IsA("TextButton") or o:IsA("TextBox") or o.Name == "SliderBack" then
+                    isInteractable = true break
+                end
+            end
+            if not isInteractable then
                 dr = true ds = i.Position sp = m.Position
             end
         end
@@ -268,6 +275,7 @@ function Library:CreateWindow(t)
             vl.TextXAlignment = Enum.TextXAlignment.Right
             vl.Parent = sf
             local sb = Instance.new("Frame")
+            sb.Name = "SliderBack"
             sb.Size = UDim2.new(1, -20, 0, 6)
             sb.Position = UDim2.new(0, 10, 0, 38)
             sb.BackgroundColor3 = Library.Theme.Secondary
