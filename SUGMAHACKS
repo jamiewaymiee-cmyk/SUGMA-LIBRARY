@@ -1,6 +1,6 @@
 local Library = {
     Flags = {},
-    Elements = {}, -- Tracks UI elements so they can be updated
+    Elements = {},
     Theme = {
         Accent = Color3.fromRGB(80, 120, 255),
         Background = Color3.fromRGB(15, 15, 20),
@@ -18,526 +18,433 @@ local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
--- Helper: Glass Styling
-local function applyGlassEffect(guiObject, radius, transparency, strokeTransparency)
-    guiObject.BackgroundColor3 = Library.Theme.Background
-    guiObject.BackgroundTransparency = transparency or 0.4
-    guiObject.BorderSizePixel = 0
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, radius or 8)
-    corner.Parent = guiObject
-    
-    if strokeTransparency then
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(255, 255, 255)
-        stroke.Transparency = strokeTransparency
-        stroke.Thickness = 1
-        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        stroke.Parent = guiObject
+local function round(n, b) b = b or 1 return math.floor(n/b + 0.5) * b end
+
+local function applyGlassEffect(g, r, t, s)
+    g.BackgroundColor3 = Library.Theme.Background
+    g.BackgroundTransparency = t or 0.4
+    g.BorderSizePixel = 0
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = g
+    if s then
+        local st = Instance.new("UIStroke")
+        st.Color = Color3.fromRGB(255, 255, 255)
+        st.Transparency = s
+        st.Thickness = 1
+        st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        st.Parent = g
     end
 end
 
--- Update System: Updates a specific flag or ALL flags
-function Library:Update(targetFlag)
-    local function refresh(flag)
-        local data = self.Elements[flag]
-        if not data then return end
-        
-        if data.Type == "Toggle" then
-            data.Indicator.BackgroundColor3 = self.Flags[flag] and self.Theme.Accent or self.Theme.Secondary
-        elseif data.Type == "Dropdown" then
-            data.Button.Text = "    " .. data.Title .. " : " .. tostring(self.Flags[flag])
-        elseif data.Type == "Keybind" then
-            data.Label.Text = tostring(self.Flags[flag])
-        elseif data.Type == "TextBox" then
-            data.Box.Text = tostring(self.Flags[flag])
-        elseif data.Type == "Slider" then
-            local percent = math.clamp((self.Flags[flag] - data.Min) / (data.Max - data.Min), 0, 1)
-            data.Fill.Size = UDim2.new(percent, 0, 1, 0)
-            data.ValLabel.Text = tostring(self.Flags[flag])
+function Library:Update(f)
+    local function r(fl)
+        local d = self.Elements[fl]
+        if not d then return end
+        if d.Type == "Toggle" then
+            d.Indicator.BackgroundColor3 = self.Flags[fl] and self.Theme.Accent or self.Theme.Secondary
+        elseif d.Type == "Dropdown" then
+            d.Button.Text = "    " .. d.Title .. " : " .. tostring(self.Flags[fl])
+        elseif d.Type == "Keybind" then
+            d.Label.Text = tostring(self.Flags[fl])
+        elseif d.Type == "TextBox" then
+            d.Box.Text = tostring(self.Flags[fl])
+        elseif d.Type == "Slider" then
+            local p = math.clamp((self.Flags[fl] - d.Min) / (d.Max - d.Min), 0, 1)
+            d.Fill.Size = UDim2.new(p, 0, 1, 0)
+            d.ValLabel.Text = tostring(self.Flags[fl])
         end
     end
-
-    if targetFlag then
-        refresh(targetFlag)
-    else
-        for flag, _ in pairs(self.Elements) do
-            refresh(flag)
-        end
-    end
+    if f then r(f) else for k, _ in pairs(self.Elements) do r(k) end end
 end
 
--- Notification System
-function Library:Notify(title, content, duration)
+function Library:Notify(t, c, d)
     if not self.Notifications then
-        local NotifyGui = Instance.new("ScreenGui")
-        NotifyGui.Name = "LiquidNotifications"
-        -- SET HIGH DISPLAY ORDER TO OVERLAP EVERYTHING
-        NotifyGui.DisplayOrder = 50000
-        NotifyGui.Parent = player:WaitForChild("PlayerGui")
-        
-        local Holder = Instance.new("Frame")
-        Holder.Size = UDim2.new(0, 300, 1, -20)
-        Holder.Position = UDim2.new(1, -310, 0, 10)
-        Holder.BackgroundTransparency = 1
-        Holder.Parent = NotifyGui
-        
-        local List = Instance.new("UIListLayout")
-        List.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        List.Padding = UDim.new(0, 10)
-        List.Parent = Holder
-        self.Notifications = Holder
+        local ng = Instance.new("ScreenGui")
+        ng.Name = "LiquidNotifs"
+        ng.DisplayOrder = 50000
+        ng.Parent = player:WaitForChild("PlayerGui")
+        local h = Instance.new("Frame")
+        h.Size = UDim2.new(0, 300, 1, -20)
+        h.Position = UDim2.new(1, -310, 0, 10)
+        h.BackgroundTransparency = 1
+        h.Parent = ng
+        local l = Instance.new("UIListLayout")
+        l.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        l.Padding = UDim.new(0, 10)
+        l.Parent = h
+        self.Notifications = h
     end
-    
-    local Notif = Instance.new("Frame")
-    Notif.Size = UDim2.new(1, 0, 0, 80)
-    Notif.ClipsDescendants = true
-    applyGlassEffect(Notif, 8, 0.2, 0.7)
-    Notif.Parent = self.Notifications
-    
-    local T = Instance.new("TextLabel")
-    T.Size = UDim2.new(1, -10, 0, 25)
-    T.Position = UDim2.new(0, 10, 0, 5)
-    T.Text = title
-    T.Font = Enum.Font.GothamBold
-    T.TextColor3 = Library.Theme.Accent
-    T.TextSize = 14
-    T.TextXAlignment = Enum.TextXAlignment.Left
-    T.BackgroundTransparency = 1
-    T.Parent = Notif
-    
-    local B = Instance.new("TextLabel")
-    B.Size = UDim2.new(1, -20, 0, 45)
-    B.Position = UDim2.new(0, 10, 0, 25)
-    B.Text = content
-    B.Font = Enum.Font.Gotham
-    B.TextColor3 = Library.Theme.Text
-    B.TextSize = 13
-    B.TextWrapped = true
-    B.TextXAlignment = Enum.TextXAlignment.Left
-    B.BackgroundTransparency = 1
-    B.Parent = Notif
-
-    task.delay(duration or 5, function()
-        TweenService:Create(Notif, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
-        TweenService:Create(T, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        TweenService:Create(B, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
-        task.wait(0.5)
-        Notif:Destroy()
+    local nf = Instance.new("Frame")
+    nf.Size = UDim2.new(1, 0, 0, 80)
+    nf.ClipsDescendants = true
+    applyGlassEffect(nf, 8, 0.2, 0.7)
+    nf.Parent = self.Notifications
+    local tl = Instance.new("TextLabel")
+    tl.Size = UDim2.new(1, -10, 0, 25)
+    tl.Position = UDim2.new(0, 10, 0, 5)
+    tl.Text = t
+    tl.Font = Enum.Font.GothamBold
+    tl.TextColor3 = Library.Theme.Accent
+    tl.TextSize = 14
+    tl.TextXAlignment = Enum.TextXAlignment.Left
+    tl.BackgroundTransparency = 1
+    tl.Parent = nf
+    local bl = Instance.new("TextLabel")
+    bl.Size = UDim2.new(1, -20, 0, 45)
+    bl.Position = UDim2.new(0, 10, 0, 25)
+    bl.Text = c
+    bl.Font = Enum.Font.Gotham
+    bl.TextColor3 = Library.Theme.Text
+    bl.TextSize = 13
+    bl.TextWrapped = true
+    bl.TextXAlignment = Enum.TextXAlignment.Left
+    bl.BackgroundTransparency = 1
+    bl.Parent = nf
+    task.delay(d or 5, function()
+        TweenService:Create(nf, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(tl, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        TweenService:Create(bl, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        task.wait(0.5) nf:Destroy()
     end)
 end
 
-function Library:CreateWindow(title)
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "LiquidUI"
-    -- SET HIGH DISPLAY ORDER TO OVERLAP EVERYTHING
-    ScreenGui.DisplayOrder = 50000
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = player:WaitForChild("PlayerGui")
-    self.ScreenGui = ScreenGui
+function Library:CreateWindow(t)
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "LiquidUI"
+    sg.DisplayOrder = 50000
+    sg.ResetOnSpawn = false
+    sg.Parent = player:WaitForChild("PlayerGui")
+    self.ScreenGui = sg
 
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == self.ToggleKey then
+    UserInputService.InputBegan:Connect(function(i, g)
+        if not g and i.KeyCode == self.ToggleKey then
             self.Opened = not self.Opened
-            ScreenGui.Enabled = self.Opened
+            sg.Enabled = self.Opened
         end
     end)
 
-    local Main = Instance.new("Frame")
-    Main.Name = "Main"
-    Main.Size = UDim2.new(0, 650, 0, 500)
-    Main.Position = UDim2.new(0.5, -325, 0.5, -250)
-    applyGlassEffect(Main, 12, 0.2, 0.6)
-    Main.Parent = ScreenGui
+    local m = Instance.new("Frame")
+    m.Size = UDim2.new(0, 650, 0, 500)
+    m.Position = UDim2.new(0.5, -325, 0.5, -250)
+    applyGlassEffect(m, 12, 0.2, 0.6)
+    m.Parent = sg
 
-    local dragging, dragStart, startPos
-    Main.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true; dragStart = input.Position; startPos = Main.Position
+    local dr, ds, sp
+    m.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            local obj = sg:GetGuiObjectsAtPosition(i.Position.X, i.Position.Y)[1]
+            if obj == m or obj.Parent == m then
+                dr = true ds = i.Position sp = m.Position
+            end
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
-            local delta = input.Position - dragStart
-            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    UserInputService.InputChanged:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseMovement and dr then
+            local d = i.Position - ds
+            m.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dr = false end end)
 
-    local TopBar = Instance.new("Frame")
-    TopBar.Size = UDim2.new(1, 0, 0, 45)
-    applyGlassEffect(TopBar, 12, 0.4, nil)
-    TopBar.Parent = Main
+    local tb = Instance.new("Frame")
+    tb.Size = UDim2.new(1, 0, 0, 45)
+    applyGlassEffect(tb, 12, 0.4, nil)
+    tb.Parent = m
 
-    local Title = Instance.new("TextLabel")
-    Title.Text = "  " .. (title or "Liquid Library")
-    Title.Size = UDim2.new(1, 0, 1, 0)
-    Title.BackgroundTransparency = 1
-    Title.TextColor3 = Library.Theme.Text
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 18
-    Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.Parent = TopBar
+    local tl = Instance.new("TextLabel")
+    tl.Text = "  " .. (t or "Liquid Library")
+    tl.Size = UDim2.new(1, 0, 1, 0)
+    tl.BackgroundTransparency = 1
+    tl.TextColor3 = Library.Theme.Text
+    tl.Font = Enum.Font.GothamBold
+    tl.TextSize = 18
+    tl.TextXAlignment = Enum.TextXAlignment.Left
+    tl.Parent = tb
 
-    local TabScroll = Instance.new("ScrollingFrame")
-    TabScroll.Size = UDim2.new(0, 150, 1, -55)
-    TabScroll.Position = UDim2.new(0, 8, 0, 50)
-    TabScroll.BackgroundTransparency = 1
-    TabScroll.ScrollBarThickness = 0
-    TabScroll.Parent = Main
-    Instance.new("UIListLayout", TabScroll).Padding = UDim.new(0, 5)
+    local ts = Instance.new("ScrollingFrame")
+    ts.Size = UDim2.new(0, 150, 1, -55)
+    ts.Position = UDim2.new(0, 8, 0, 50)
+    ts.BackgroundTransparency = 1
+    ts.ScrollBarThickness = 0
+    ts.Parent = m
+    Instance.new("UIListLayout", ts).Padding = UDim.new(0, 5)
 
-    local PageContainer = Instance.new("Frame")
-    PageContainer.Size = UDim2.new(1, -175, 1, -55)
-    PageContainer.Position = UDim2.new(0, 165, 0, 50)
-    PageContainer.BackgroundTransparency = 1
-    PageContainer.Parent = Main
+    local pc = Instance.new("Frame")
+    pc.Size = UDim2.new(1, -175, 1, -55)
+    pc.Position = UDim2.new(0, 165, 0, 50)
+    pc.BackgroundTransparency = 1
+    pc.Parent = m
 
-    local Window = { CurrentTab = nil }
+    local w = { CurrentTab = nil }
 
-    function Window:CreateTab(name)
-        local TabBtn = Instance.new("TextButton")
-        TabBtn.Size = UDim2.new(1, -5, 0, 40)
-        TabBtn.Text = name
-        TabBtn.TextColor3 = Library.Theme.Text
-        TabBtn.Font = Enum.Font.GothamSemibold
-        TabBtn.TextSize = 14
-        applyGlassEffect(TabBtn, 6, 0.6, 0.8)
-        TabBtn.Parent = TabScroll
+    function w:CreateTab(n)
+        local tbt = Instance.new("TextButton")
+        tbt.Size = UDim2.new(1, -5, 0, 40)
+        tbt.Text = n
+        tbt.TextColor3 = Library.Theme.Text
+        tbt.Font = Enum.Font.GothamSemibold
+        tbt.TextSize = 14
+        applyGlassEffect(tbt, 6, 0.6, 0.8)
+        tbt.Parent = ts
 
-        local Page = Instance.new("ScrollingFrame")
-        Page.Size = UDim2.new(1, 0, 1, 0)
-        Page.Visible = false
-        Page.BackgroundTransparency = 1
-        Page.ScrollBarThickness = 2
-        Page.ScrollBarImageColor3 = Library.Theme.Accent
-        Page.Parent = PageContainer
+        local p = Instance.new("ScrollingFrame")
+        p.Size = UDim2.new(1, 0, 1, 0)
+        p.Visible = false
+        p.BackgroundTransparency = 1
+        p.ScrollBarThickness = 2
+        p.ScrollBarImageColor3 = Library.Theme.Accent
+        p.Parent = pc
 
-        local PageList = Instance.new("UIListLayout")
-        PageList.Padding = UDim.new(0, 8)
-        PageList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        PageList.Parent = Page
+        local pl = Instance.new("UIListLayout")
+        pl.Padding = UDim.new(0, 8)
+        pl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        pl.Parent = p
         
-        PageList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
+        pl:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            p.CanvasSize = UDim2.new(0, 0, 0, pl.AbsoluteContentSize.Y + 20)
         end)
 
-        TabBtn.MouseButton1Click:Connect(function()
-            for _, p in pairs(PageContainer:GetChildren()) do p.Visible = false end
-            for _, b in pairs(TabScroll:GetChildren()) do 
-                if b:IsA("TextButton") then b.BackgroundColor3 = Library.Theme.Background end
-            end
-            Page.Visible = true
-            TabBtn.BackgroundColor3 = Library.Theme.Accent
+        tbt.MouseButton1Click:Connect(function()
+            for _, v in pairs(pc:GetChildren()) do v.Visible = false end
+            for _, b in pairs(ts:GetChildren()) do if b:IsA("TextButton") then b.BackgroundColor3 = Library.Theme.Background end end
+            p.Visible = true tbt.BackgroundColor3 = Library.Theme.Accent
         end)
 
-        if not Window.CurrentTab then
-            Page.Visible = true
-            TabBtn.BackgroundColor3 = Library.Theme.Accent
-            Window.CurrentTab = name
+        if not w.CurrentTab then p.Visible = true tbt.BackgroundColor3 = Library.Theme.Accent w.CurrentTab = n end
+
+        local el = {}
+
+        function el:CreateLabel(txt)
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, -10, 0, 30)
+            l.BackgroundTransparency = 1
+            l.Text = "    " .. txt
+            l.Font = Enum.Font.GothamSemibold
+            l.TextColor3 = Library.Theme.Text
+            l.TextSize = 14
+            l.TextXAlignment = Enum.TextXAlignment.Left
+            l.Parent = p
+            return {Set = function(s, nt) l.Text = "    " .. nt end}
         end
 
-        local Elements = {}
-
-        function Elements:CreateLabel(text)
-            local Label = Instance.new("TextLabel")
-            Label.Size = UDim2.new(1, -10, 0, 30)
-            Label.BackgroundTransparency = 1
-            Label.Text = "    " .. text
-            Label.Font = Enum.Font.GothamSemibold
-            Label.TextColor3 = Library.Theme.Text
-            Label.TextSize = 14
-            Label.TextXAlignment = Enum.TextXAlignment.Left
-            Label.Parent = Page
-            
-            local LabelObj = {}
-            function LabelObj:Set(newText)
-                Label.Text = "    " .. newText
-            end
-            return LabelObj
+        function el:CreateButton(txt, cb)
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(1, -10, 0, 45)
+            b.Text = txt
+            b.Font = Enum.Font.Gotham
+            b.TextColor3 = Library.Theme.Text
+            b.TextSize = 14
+            applyGlassEffect(b, 6, 0.5, 0.7)
+            b.Parent = p
+            b.MouseButton1Click:Connect(cb)
         end
 
-        function Elements:CreateButton(text, callback)
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, -10, 0, 45)
-            Btn.Text = text
-            Btn.Font = Enum.Font.Gotham
-            Btn.TextColor3 = Library.Theme.Text
-            Btn.TextSize = 14
-            applyGlassEffect(Btn, 6, 0.5, 0.7)
-            Btn.Parent = Page
-            Btn.MouseButton1Click:Connect(callback)
-        end
-
-        function Elements:CreateSlider(text, flag, min, max, default, callback)
-            Library.Flags[flag] = default or min
-            
-            local SliderFrame = Instance.new("Frame")
-            SliderFrame.Size = UDim2.new(1, -10, 0, 55)
-            applyGlassEffect(SliderFrame, 6, 0.5, 0.7)
-            SliderFrame.Parent = Page
-
-            local Title = Instance.new("TextLabel")
-            Title.Size = UDim2.new(1, -20, 0, 25)
-            Title.Position = UDim2.new(0, 10, 0, 5)
-            Title.BackgroundTransparency = 1
-            Title.Text = text
-            Title.Font = Enum.Font.Gotham
-            Title.TextColor3 = Library.Theme.Text
-            Title.TextSize = 14
-            Title.TextXAlignment = Enum.TextXAlignment.Left
-            Title.Parent = SliderFrame
-
-            local ValLabel = Instance.new("TextLabel")
-            ValLabel.Size = UDim2.new(0, 40, 0, 25)
-            ValLabel.Position = UDim2.new(1, -50, 0, 5)
-            ValLabel.BackgroundTransparency = 1
-            ValLabel.Text = tostring(Library.Flags[flag])
-            ValLabel.Font = Enum.Font.GothamBold
-            ValLabel.TextColor3 = Library.Theme.Accent
-            ValLabel.TextSize = 14
-            ValLabel.TextXAlignment = Enum.TextXAlignment.Right
-            ValLabel.Parent = SliderFrame
-
-            local SliderBack = Instance.new("Frame")
-            SliderBack.Size = UDim2.new(1, -20, 0, 6)
-            SliderBack.Position = UDim2.new(0, 10, 0, 38)
-            SliderBack.BackgroundColor3 = Library.Theme.Secondary
-            SliderBack.BorderSizePixel = 0
-            SliderBack.Parent = SliderFrame
-            Instance.new("UICorner", SliderBack).CornerRadius = UDim.new(0, 4)
-
-            local SliderFill = Instance.new("Frame")
-            SliderFill.Size = UDim2.new((Library.Flags[flag] - min) / (max - min), 0, 1, 0)
-            SliderFill.BackgroundColor3 = Library.Theme.Accent
-            SliderFill.BorderSizePixel = 0
-            SliderFill.Parent = SliderBack
-            Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 4)
-
-            Library.Elements[flag] = {Type = "Slider", Fill = SliderFill, ValLabel = ValLabel, Min = min, Max = max}
-
+        function el:CreateSlider(txt, fl, min, max, d, st, cb)
+            local stp = st or 1
+            Library.Flags[fl] = d or min
+            local sf = Instance.new("Frame")
+            sf.Size = UDim2.new(1, -10, 0, 55)
+            applyGlassEffect(sf, 6, 0.5, 0.7)
+            sf.Parent = p
+            local ti = Instance.new("TextLabel")
+            ti.Size = UDim2.new(1, -20, 0, 25)
+            ti.Position = UDim2.new(0, 10, 0, 5)
+            ti.BackgroundTransparency = 1
+            ti.Text = txt
+            ti.Font = Enum.Font.Gotham
+            ti.TextColor3 = Library.Theme.Text
+            ti.TextSize = 14
+            ti.TextXAlignment = Enum.TextXAlignment.Left
+            ti.Parent = sf
+            local vl = Instance.new("TextLabel")
+            vl.Size = UDim2.new(0, 60, 0, 25)
+            vl.Position = UDim2.new(1, -70, 0, 5)
+            vl.BackgroundTransparency = 1
+            vl.Text = tostring(Library.Flags[fl])
+            vl.Font = Enum.Font.GothamBold
+            vl.TextColor3 = Library.Theme.Accent
+            vl.TextSize = 14
+            vl.TextXAlignment = Enum.TextXAlignment.Right
+            vl.Parent = sf
+            local sb = Instance.new("Frame")
+            sb.Size = UDim2.new(1, -20, 0, 6)
+            sb.Position = UDim2.new(0, 10, 0, 38)
+            sb.BackgroundColor3 = Library.Theme.Secondary
+            sb.BorderSizePixel = 0
+            sb.Parent = sf
+            Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 4)
+            local sfl = Instance.new("Frame")
+            sfl.Size = UDim2.new((Library.Flags[fl] - min) / (max - min), 0, 1, 0)
+            sfl.BackgroundColor3 = Library.Theme.Accent
+            sfl.BorderSizePixel = 0
+            sfl.Parent = sb
+            Instance.new("UICorner", sfl).CornerRadius = UDim.new(0, 4)
+            Library.Elements[fl] = {Type = "Slider", Fill = sfl, ValLabel = vl, Min = min, Max = max}
             local function move()
-                local mousePos = UserInputService:GetMouseLocation().X
-                local framePos = SliderBack.AbsolutePosition.X
-                local frameSize = SliderBack.AbsoluteSize.X
-                local percent = math.clamp((mousePos - framePos) / frameSize, 0, 1)
-                local value = math.floor(min + (max - min) * percent)
-                
-                Library.Flags[flag] = value
-                SliderFill.Size = UDim2.new(percent, 0, 1, 0)
-                ValLabel.Text = tostring(value)
-                if callback then callback(value) end
+                local mX = UserInputService:GetMouseLocation().X
+                local aX = sb.AbsolutePosition.X
+                local aW = sb.AbsoluteSize.X
+                local per = math.clamp((mX - aX) / aW, 0, 1)
+                local val = round(min + (max - min) * per, stp)
+                Library.Flags[fl] = val
+                sfl.Size = UDim2.new(math.clamp((val - min) / (max - min), 0, 1), 0, 1, 0)
+                vl.Text = tostring(val)
+                if cb then cb(val) end
             end
-
-            SliderFrame.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    local moveConn
-                    moveConn = UserInputService.InputChanged:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseMovement then move() end
-                    end)
+            sf.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dr = false
+                    local con
+                    con = UserInputService.InputChanged:Connect(function(io) if io.UserInputType == Enum.UserInputType.MouseMovement then move() end end)
                     move()
-                    UserInputService.InputEnded:Connect(function(input)
-                        if input.UserInputType == Enum.UserInputType.MouseButton1 and moveConn then
-                            moveConn:Disconnect()
-                            moveConn = nil
-                        end
+                    local endCon
+                    endCon = UserInputService.InputEnded:Connect(function(io)
+                        if io.UserInputType == Enum.UserInputType.MouseButton1 then con:Disconnect() endCon:Disconnect() end
                     end)
                 end
             end)
         end
 
-        function Elements:CreateTextBox(text, flag, default, callback)
-            Library.Flags[flag] = default or ""
-            local BoxFrame = Instance.new("Frame")
-            BoxFrame.Size = UDim2.new(1, -10, 0, 45)
-            applyGlassEffect(BoxFrame, 6, 0.5, 0.7)
-            BoxFrame.Parent = Page
-
-            local Box = Instance.new("TextBox")
-            Box.Size = UDim2.new(1, -20, 1, 0)
-            Box.Position = UDim2.new(0, 10, 0, 0)
-            Box.BackgroundTransparency = 1
-            Box.Text = Library.Flags[flag]
-            Box.PlaceholderText = text
-            Box.Font = Enum.Font.Gotham
-            Box.TextColor3 = Library.Theme.Text
-            Box.TextSize = 14
-            Box.TextXAlignment = Enum.TextXAlignment.Left
-            Box.Parent = BoxFrame
-
-            Library.Elements[flag] = {Type = "TextBox", Box = Box}
-
-            Box.FocusLost:Connect(function()
-                Library.Flags[flag] = Box.Text
-                if callback then callback(Box.Text) end
-            end)
+        function el:CreateTextBox(txt, fl, d, cb)
+            Library.Flags[fl] = d or ""
+            local bf = Instance.new("Frame")
+            bf.Size = UDim2.new(1, -10, 0, 45)
+            applyGlassEffect(bf, 6, 0.5, 0.7)
+            bf.Parent = p
+            local box = Instance.new("TextBox")
+            box.Size = UDim2.new(1, -20, 1, 0)
+            box.Position = UDim2.new(0, 10, 0, 0)
+            box.BackgroundTransparency = 1
+            box.Text = Library.Flags[fl]
+            box.PlaceholderText = txt
+            box.Font = Enum.Font.Gotham
+            box.TextColor3 = Library.Theme.Text
+            box.TextSize = 14
+            box.TextXAlignment = Enum.TextXAlignment.Left
+            box.Parent = bf
+            Library.Elements[fl] = {Type = "TextBox", Box = box}
+            box.FocusLost:Connect(function() Library.Flags[fl] = box.Text if cb then cb(box.Text) end end)
         end
 
-        function Elements:CreateToggle(text, flag, default, callback)
-            Library.Flags[flag] = default or false
-            local Toggle = Instance.new("TextButton")
-            Toggle.Size = UDim2.new(1, -10, 0, 45)
-            Toggle.Text = "   " .. text
-            Toggle.Font = Enum.Font.Gotham
-            Toggle.TextColor3 = Library.Theme.Text
-            Toggle.TextSize = 14
-            Toggle.TextXAlignment = Enum.TextXAlignment.Left
-            applyGlassEffect(Toggle, 6, 0.5, 0.7)
-            Toggle.Parent = Page
-
-            local Ind = Instance.new("Frame")
-            Ind.Size = UDim2.new(0, 24, 0, 24)
-            Ind.Position = UDim2.new(1, -34, 0.5, -12)
-            applyGlassEffect(Ind, 4, 0.2, 0.5)
-            Ind.BackgroundColor3 = Library.Flags[flag] and Library.Theme.Accent or Library.Theme.Secondary
-            Ind.Parent = Toggle
-
-            Library.Elements[flag] = {Type = "Toggle", Indicator = Ind}
-
-            Toggle.MouseButton1Click:Connect(function()
-                Library.Flags[flag] = not Library.Flags[flag]
-                Library:Update(flag)
-                if callback then callback(Library.Flags[flag]) end
-            end)
+        function el:CreateToggle(txt, fl, d, cb)
+            Library.Flags[fl] = d or false
+            local t = Instance.new("TextButton")
+            t.Size = UDim2.new(1, -10, 0, 45)
+            t.Text = "   " .. txt
+            t.Font = Enum.Font.Gotham
+            t.TextColor3 = Library.Theme.Text
+            t.TextSize = 14
+            t.TextXAlignment = Enum.TextXAlignment.Left
+            applyGlassEffect(t, 6, 0.5, 0.7)
+            t.Parent = p
+            local ind = Instance.new("Frame")
+            ind.Size = UDim2.new(0, 24, 0, 24)
+            ind.Position = UDim2.new(1, -34, 0.5, -12)
+            applyGlassEffect(ind, 4, 0.2, 0.5)
+            ind.BackgroundColor3 = Library.Flags[fl] and Library.Theme.Accent or Library.Theme.Secondary
+            ind.Parent = t
+            Library.Elements[fl] = {Type = "Toggle", Indicator = ind}
+            t.MouseButton1Click:Connect(function() Library.Flags[fl] = not Library.Flags[fl] Library:Update(fl) if cb then cb(Library.Flags[fl]) end end)
         end
 
-        function Elements:CreateKeybind(text, flag, default, callback)
-            Library.Flags[flag] = default.Name
-            local binding = false
-            local Bind = Instance.new("TextButton")
-            Bind.Size = UDim2.new(1, -10, 0, 45)
-            Bind.Text = "   " .. text
-            Bind.Font = Enum.Font.Gotham
-            Bind.TextColor3 = Library.Theme.Text
-            Bind.TextSize = 14
-            Bind.TextXAlignment = Enum.TextXAlignment.Left
-            applyGlassEffect(Bind, 6, 0.5, 0.7)
-            Bind.Parent = Page
-
-            local Lbl = Instance.new("TextLabel")
-            Lbl.Size = UDim2.new(0, 80, 0, 26)
-            Lbl.Position = UDim2.new(1, -90, 0.5, -13)
-            Lbl.Text = Library.Flags[flag]
-            Lbl.Font = Enum.Font.GothamBold
-            Lbl.TextColor3 = Library.Theme.Accent
-            applyGlassEffect(Lbl, 4, 0.3, 0.5)
-            Lbl.Parent = Bind
-
-            Library.Elements[flag] = {Type = "Keybind", Label = Lbl}
-
-            Bind.MouseButton1Click:Connect(function()
-                binding = true
-                Lbl.Text = "..."
-            end)
-
-            UserInputService.InputBegan:Connect(function(input)
-                if binding and input.UserInputType == Enum.UserInputType.Keyboard then
-                    Library.Flags[flag] = input.KeyCode.Name
-                    Library:Update(flag)
-                    binding = false
-                elseif not binding and input.KeyCode.Name == Library.Flags[flag] then
-                    if callback then callback() end
+        function el:CreateKeybind(txt, fl, d, cb)
+            Library.Flags[fl] = d.Name
+            local bnd = false
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(1, -10, 0, 45)
+            b.Text = "   " .. txt
+            b.Font = Enum.Font.Gotham
+            b.TextColor3 = Library.Theme.Text
+            b.TextSize = 14
+            b.TextXAlignment = Enum.TextXAlignment.Left
+            applyGlassEffect(b, 6, 0.5, 0.7)
+            b.Parent = p
+            local lb = Instance.new("TextLabel")
+            lb.Size = UDim2.new(0, 80, 0, 26)
+            lb.Position = UDim2.new(1, -90, 0.5, -13)
+            lb.Text = Library.Flags[fl]
+            lb.Font = Enum.Font.GothamBold
+            lb.TextColor3 = Library.Theme.Accent
+            applyGlassEffect(lb, 4, 0.3, 0.5)
+            lb.Parent = b
+            Library.Elements[fl] = {Type = "Keybind", Label = lb}
+            b.MouseButton1Click:Connect(function() bnd = true lb.Text = "..." end)
+            UserInputService.InputBegan:Connect(function(i)
+                if bnd and i.UserInputType == Enum.UserInputType.Keyboard then
+                    Library.Flags[fl] = i.KeyCode.Name Library:Update(fl) bnd = false
+                elseif not bnd and i.KeyCode.Name == Library.Flags[fl] then
+                    if cb then cb() end
                 end
             end)
         end
 
-        function Elements:CreateDropdown(text, flag, list, callback)
-            Library.Flags[flag] = list[1]
-            local itemHeight = 35
-
-            local Drop = Instance.new("Frame")
-            Drop.Size = UDim2.new(1, -10, 0, 45)
-            Drop.ClipsDescendants = true
-            applyGlassEffect(Drop, 6, 0.5, 0.7)
-            Drop.Parent = Page
-
-            local Btn = Instance.new("TextButton")
-            Btn.Size = UDim2.new(1, 0, 0, 45)
-            Btn.Text = "   " .. text .. " : " .. Library.Flags[flag]
-            Btn.Font = Enum.Font.Gotham
-            Btn.TextColor3 = Library.Theme.Text
-            Btn.TextSize = 14
-            Btn.BackgroundTransparency = 1
-            Btn.TextXAlignment = Enum.TextXAlignment.Left
-            Btn.Parent = Drop
-
-            local Container = Instance.new("Frame")
-            Container.Size = UDim2.new(1, 0, 0, #list * itemHeight)
-            Container.Position = UDim2.new(0, 0, 0, 45)
-            Container.BackgroundTransparency = 1
-            Container.Parent = Drop
-            Instance.new("UIListLayout", Container)
-
-            Library.Elements[flag] = {Type = "Dropdown", Button = Btn, Title = text}
-
-            local open = false
-            Btn.MouseButton1Click:Connect(function()
-                open = not open
-                Drop.Size = open and UDim2.new(1, -10, 0, 45 + (#list * itemHeight)) or UDim2.new(1, -10, 0, 45)
-                Page.CanvasSize = UDim2.new(0, 0, 0, PageList.AbsoluteContentSize.Y + 20)
+        function el:CreateDropdown(txt, fl, l, cb)
+            Library.Flags[fl] = l[1]
+            local ih = 35
+            local d = Instance.new("Frame")
+            d.Size = UDim2.new(1, -10, 0, 45)
+            d.ClipsDescendants = true
+            applyGlassEffect(d, 6, 0.5, 0.7)
+            d.Parent = p
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(1, 0, 0, 45)
+            b.Text = "   " .. txt .. " : " .. Library.Flags[fl]
+            b.Font = Enum.Font.Gotham
+            b.TextColor3 = Library.Theme.Text
+            b.TextSize = 14
+            b.BackgroundTransparency = 1
+            b.TextXAlignment = Enum.TextXAlignment.Left
+            b.Parent = d
+            local c = Instance.new("Frame")
+            c.Size = UDim2.new(1, 0, 0, #l * ih)
+            c.Position = UDim2.new(0, 0, 0, 45)
+            c.BackgroundTransparency = 1
+            c.Parent = d
+            Instance.new("UIListLayout", c)
+            Library.Elements[fl] = {Type = "Dropdown", Button = b, Title = txt}
+            local o = false
+            b.MouseButton1Click:Connect(function()
+                o = not o d.Size = o and UDim2.new(1, -10, 0, 45 + (#l * ih)) or UDim2.new(1, -10, 0, 45)
+                p.CanvasSize = UDim2.new(0, 0, 0, pl.AbsoluteContentSize.Y + 20)
             end)
-
-            for _, v in pairs(list) do
-                local Item = Instance.new("TextButton")
-                Item.Size = UDim2.new(1, 0, 0, itemHeight)
-                Item.Text = v
-                Item.Font = Enum.Font.Gotham
-                Item.TextColor3 = Color3.fromRGB(180, 180, 180)
-                Item.BackgroundTransparency = 1
-                Item.Parent = Container
-                Item.MouseButton1Click:Connect(function()
-                    Library.Flags[flag] = v
-                    Library:Update(flag)
-                    open = false
-                    Drop.Size = UDim2.new(1, -10, 0, 45)
-                    if callback then callback(v) end
+            for _, v in pairs(l) do
+                local it = Instance.new("TextButton")
+                it.Size = UDim2.new(1, 0, 0, ih)
+                it.Text = v
+                it.Font = Enum.Font.Gotham
+                it.TextColor3 = Color3.fromRGB(180, 180, 180)
+                it.BackgroundTransparency = 1
+                it.Parent = c
+                it.MouseButton1Click:Connect(function()
+                    Library.Flags[fl] = v Library:Update(fl) o = false d.Size = UDim2.new(1, -10, 0, 45)
+                    if cb then cb(v) end
                 end)
             end
         end
-
-        return Elements
+        return el
     end
 
-    function Window:CreateConfigTab()
-        local Tab = self:CreateTab("Settings")
-        Tab:CreateTextBox("Config Name...", "ConfigName", "DefaultConfig")
-
-        Tab:CreateButton("Save Config", function()
+    function w:CreateConfigTab()
+        local t = self:CreateTab("Settings")
+        t:CreateTextBox("Config Name...", "ConfigName", "DefaultConfig")
+        t:CreateButton("Save Config", function()
             if writefile then
-                local name = Library.Flags["ConfigName"] .. ".json"
-                writefile(name, HttpService:JSONEncode(Library.Flags))
-                Library:Notify("Config", "Saved to " .. name, 3)
-            else
-                Library:Notify("Error", "Your executor does not support writefile.", 3)
+                local n = Library.Flags["ConfigName"] .. ".json"
+                writefile(n, HttpService:JSONEncode(Library.Flags))
+                Library:Notify("Config", "Saved to " .. n, 3)
             end
         end)
-
-        Tab:CreateButton("Load Config", function()
-            local name = Library.Flags["ConfigName"] .. ".json"
-            if isfile and isfile(name) then
-                local success, result = pcall(function() return HttpService:JSONDecode(readfile(name)) end)
-                if success and type(result) == "table" then
-                    for key, val in pairs(result) do Library.Flags[key] = val end
-                    Library:Update()
-                    Library:Notify("Config", "Successfully loaded " .. name, 3)
-                else
-                    Library:Notify("Error", "Failed to parse config file.", 3)
-                end
-            else
-                Library:Notify("Error", "File not found!", 3)
+        t:CreateButton("Load Config", function()
+            local n = Library.Flags["ConfigName"] .. ".json"
+            if isfile and isfile(n) then
+                local s, res = pcall(function() return HttpService:JSONDecode(readfile(n)) end)
+                if s then for k, v in pairs(res) do Library.Flags[k] = v end Library:Update() end
             end
         end)
-
-        Tab:CreateButton("Destroy UI", function()
-            Library.ScreenGui:Destroy()
-            if Library.Notifications then Library.Notifications.Parent:Destroy() end
-        end)
+        t:CreateButton("Destroy UI", function() sg:Destroy() if Library.Notifications then Library.Notifications.Parent:Destroy() end end)
     end
-
-    return Window
+    return w
 end
 
 return Library
