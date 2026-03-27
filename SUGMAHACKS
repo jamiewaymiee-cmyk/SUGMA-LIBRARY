@@ -53,14 +53,16 @@ local e={}
 function e:CreateLabel(txt) local l=Instance.new("TextLabel");l.Size=UDim2.new(1,-10,0,30);l.BackgroundTransparency=1;l.Text=" "..txt;l.Font=Enum.Font.GothamSemibold;l.TextColor3=Library.Theme.Text;l.TextSize=14;l.TextXAlignment=Enum.TextXAlignment.Left;l.Parent=p;return {Set=function(_,nt) l.Text=" "..nt end} end
 function e:CreateButton(txt,cb) local b=Instance.new("TextButton");b.Size=UDim2.new(1,-10,0,45);b.Text=txt;b.Font=Enum.Font.Gotham;b.TextColor3=Library.Theme.Text;b.TextSize=14;applyGlassEffect(b,6,0.5,0.7);b.Parent=p;b.MouseButton1Click:Connect(cb) end
 function e:CreateSlider(txt,f,mn,mx,df,cb)
-Library.Flags[f]=df or mn
+local isInt=mn==math.floor(mn) and mx==math.floor(mx)
+local function snapVal(v) if isInt then return math.floor(v+0.5) else return math.floor(v*100+0.5)/100 end end
+Library.Flags[f]=snapVal(df or mn)
 local sf=Instance.new("Frame");sf.Size=UDim2.new(1,-10,0,55);applyGlassEffect(sf,6,0.5,0.7);sf.Parent=p
 local tl=Instance.new("TextLabel");tl.Size=UDim2.new(1,-20,0,25);tl.Position=UDim2.new(0,10,0,5);tl.BackgroundTransparency=1;tl.Text=txt;tl.Font=Enum.Font.Gotham;tl.TextColor3=Library.Theme.Text;tl.TextSize=14;tl.TextXAlignment=Enum.TextXAlignment.Left;tl.Parent=sf
 local vl=Instance.new("TextLabel");vl.Size=UDim2.new(0,40,0,25);vl.Position=UDim2.new(1,-50,0,5);vl.BackgroundTransparency=1;vl.Text=tostring(Library.Flags[f]);vl.Font=Enum.Font.GothamBold;vl.TextColor3=Library.Theme.Accent;vl.TextSize=14;vl.TextXAlignment=Enum.TextXAlignment.Right;vl.Parent=sf
 local sb=Instance.new("Frame");sb.Size=UDim2.new(1,-20,0,6);sb.Position=UDim2.new(0,10,0,38);sb.BackgroundColor3=Library.Theme.Secondary;sb.BorderSizePixel=0;sb.Parent=sf;Instance.new("UICorner",sb).CornerRadius=UDim.new(0,4)
 local sfi=Instance.new("Frame");sfi.Size=UDim2.new((Library.Flags[f]-mn)/(mx-mn),0,1,0);sfi.BackgroundColor3=Library.Theme.Accent;sfi.BorderSizePixel=0;sfi.Parent=sb;Instance.new("UICorner",sfi).CornerRadius=UDim.new(0,4)
 Library.Elements[f]={Type="Slider",Fill=sfi,ValLabel=vl,Min=mn,Max=mx}
-local function mv() local pct=math.clamp((UserInputService:GetMouseLocation().X-sb.AbsolutePosition.X)/sb.AbsoluteSize.X,0,1);local val=math.floor((mn+(mx-mn)*pct)*100)/100;Library.Flags[f]=val;sfi.Size=UDim2.new(pct,0,1,0);vl.Text=tostring(val);if cb then cb(val) end end
+local function mv() local pct=math.clamp((UserInputService:GetMouseLocation().X-sb.AbsolutePosition.X)/sb.AbsoluteSize.X,0,1);local val=snapVal(mn+(mx-mn)*pct);local snappedPct=(val-mn)/(mx-mn);Library.Flags[f]=val;sfi.Size=UDim2.new(snappedPct,0,1,0);vl.Text=tostring(val);if cb then cb(val) end end
 sf.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then local mc;mc=UserInputService.InputChanged:Connect(function(ic) if ic.UserInputType==Enum.UserInputType.MouseMovement then mv() end end);mv();UserInputService.InputEnded:Connect(function(ie) if ie.UserInputType==Enum.UserInputType.MouseButton1 and mc then mc:Disconnect();mc=nil end end) end end)
 end
 function e:CreateTextBox(txt,f,df,cb)
