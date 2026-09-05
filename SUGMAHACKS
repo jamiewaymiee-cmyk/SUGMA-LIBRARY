@@ -29,16 +29,36 @@ local tl=Instance.new("TextLabel");tl.Size=UDim2.new(1,-10,0,25);tl.Position=UDi
 local bl=Instance.new("TextLabel");bl.Size=UDim2.new(1,-20,0,45);bl.Position=UDim2.new(0,10,0,25);bl.Text=c;bl.Font=Enum.Font.Gotham;bl.TextColor3=Library.Theme.Text;bl.TextSize=13;bl.TextWrapped=true;bl.TextXAlignment=Enum.TextXAlignment.Left;bl.BackgroundTransparency=1;bl.Parent=no
 task.delay(d or 5,function() TweenService:Create(no,TweenInfo.new(0.5),{BackgroundTransparency=1}):Play();TweenService:Create(tl,TweenInfo.new(0.5),{TextTransparency=1}):Play();TweenService:Create(bl,TweenInfo.new(0.5),{TextTransparency=1}):Play();task.wait(0.5);no:Destroy() end)
 end
-function Library:CreateWindow(t)
+function Library:UIDelete()
+if self.ScreenGui then self.ScreenGui:Destroy();self.ScreenGui=nil end
+if self.Notifications then if self.Notifications.Parent then self.Notifications.Parent:Destroy() end;self.Notifications=nil end
+end
+function Library:SaveConfig(name)
+local n=(name or self.Flags["ConfigName"] or "config")..".json"
+if writefile then writefile(n,HttpService:JSONEncode(self.Flags));self:Notify("Config","Saved to "..n,3) else self:Notify("Error","Your executor does not support writefile.",3) end
+end
+function Library:LoadConfig(name)
+local n=(name or self.Flags["ConfigName"] or "config")..".json"
+if isfile and isfile(n) then
+local s,r=pcall(function() return HttpService:JSONDecode(readfile(n)) end)
+if s and type(r)=="table" then for k,v in pairs(r) do self.Flags[k]=v end;self:Update();self:Notify("Config","Successfully loaded "..n,3)
+else self:Notify("Error","Failed to parse config file.",3) end
+else self:Notify("Error","File not found!",3) end
+end
+function Library:CreateWindow(cfg)
+local title,settingsEnabled
+if type(cfg)=="table" then title=cfg.Title or "Liquid Library";settingsEnabled=(cfg.Settings==nil) and true or cfg.Settings
+else title=cfg or "Liquid Library";settingsEnabled=true end
 local sg=Instance.new("ScreenGui");sg.Name="LiquidUI";sg.DisplayOrder=50000;sg.ResetOnSpawn=false;sg.Parent=player:WaitForChild("PlayerGui");self.ScreenGui=sg
 UserInputService.InputBegan:Connect(function(i,gpe) if not gpe and i.KeyCode==self.ToggleKey then self.Opened=not self.Opened;sg.Enabled=self.Opened end end)
 local m=Instance.new("Frame");m.Name="Main";m.Size=UDim2.new(0,650,0,500);m.Position=UDim2.new(0.5,-325,0.5,-250);applyGlassEffect(m,12,0.2,0.6);m.Parent=sg
+local tb=Instance.new("Frame");tb.Size=UDim2.new(1,0,0,45);applyGlassEffect(tb,12,0.4,nil);tb.Parent=m
+local tt=Instance.new("TextLabel");tt.Text=" "..title;tt.Size=UDim2.new(1,0,1,0);tt.BackgroundTransparency=1;tt.TextColor3=Library.Theme.Text;tt.Font=Enum.Font.GothamBold;tt.TextSize=18;tt.TextXAlignment=Enum.TextXAlignment.Left;tt.Parent=tb
+-- Drag Logic (Topbar only)
 local dr,ds,sp
-m.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=true;ds=i.Position;sp=m.Position end end)
+tb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=true;ds=i.Position;sp=m.Position end end)
 UserInputService.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseMovement and dr then local d=i.Position-ds;m.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y) end end)
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dr=false end end)
-local tb=Instance.new("Frame");tb.Size=UDim2.new(1,0,0,45);applyGlassEffect(tb,12,0.4,nil);tb.Parent=m
-local tt=Instance.new("TextLabel");tt.Text=" "..(t or "Liquid Library");tt.Size=UDim2.new(1,0,1,0);tt.BackgroundTransparency=1;tt.TextColor3=Library.Theme.Text;tt.Font=Enum.Font.GothamBold;tt.TextSize=18;tt.TextXAlignment=Enum.TextXAlignment.Left;tt.Parent=tb
 local ts=Instance.new("ScrollingFrame");ts.Size=UDim2.new(0,150,1,-55);ts.Position=UDim2.new(0,8,0,50);ts.BackgroundTransparency=1;ts.ScrollBarThickness=0;ts.Parent=m;Instance.new("UIListLayout",ts).Padding=UDim.new(0,5)
 local pc=Instance.new("Frame");pc.Size=UDim2.new(1,-175,1,-55);pc.Position=UDim2.new(0,165,0,50);pc.BackgroundTransparency=1;pc.Parent=m
 local w={CurrentTab=nil}
@@ -80,12 +100,30 @@ Library.Elements[f]={Type="Toggle",Indicator=ind}
 tg.MouseButton1Click:Connect(function() Library.Flags[f]=not Library.Flags[f];Library:Update(f);if cb then cb(Library.Flags[f]) end end)
 end
 function e:CreateKeybind(txt,f,df,cb)
-Library.Flags[f]=df.Name;local bnd=false
+local defaultName
+if typeof(df)=="EnumItem" then defaultName=df.Name else defaultName=tostring(df) end
+Library.Flags[f]=defaultName;local bnd=false
 local bd=Instance.new("TextButton");bd.Size=UDim2.new(1,-10,0,45);bd.Text=" "..txt;bd.Font=Enum.Font.Gotham;bd.TextColor3=Library.Theme.Text;bd.TextSize=14;bd.TextXAlignment=Enum.TextXAlignment.Left;applyGlassEffect(bd,6,0.5,0.7);bd.Parent=p
 local lb=Instance.new("TextLabel");lb.Size=UDim2.new(0,80,0,26);lb.Position=UDim2.new(1,-90,0.5,-13);lb.Text=Library.Flags[f];lb.Font=Enum.Font.GothamBold;lb.TextColor3=Library.Theme.Accent;applyGlassEffect(lb,4,0.3,0.5);lb.Parent=bd
 Library.Elements[f]={Type="Keybind",Label=lb}
 bd.MouseButton1Click:Connect(function() bnd=true;lb.Text="..." end)
-UserInputService.InputBegan:Connect(function(i) if bnd and i.UserInputType==Enum.UserInputType.Keyboard then Library.Flags[f]=i.KeyCode.Name;Library:Update(f);bnd=false elseif not bnd and i.KeyCode.Name==Library.Flags[f] then if cb then cb() end end end)
+-- supports Keyboard, MouseButton1, MouseButton2
+UserInputService.InputBegan:Connect(function(i,gpe)
+if bnd then
+if i.UserInputType==Enum.UserInputType.Keyboard then
+Library.Flags[f]=i.KeyCode.Name;Library:Update(f);bnd=false
+elseif i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.MouseButton2 then
+Library.Flags[f]=i.UserInputType.Name;Library:Update(f);bnd=false
+end
+else
+if gpe then return end
+if i.UserInputType==Enum.UserInputType.Keyboard and i.KeyCode.Name==Library.Flags[f] then
+if cb then cb() end
+elseif (i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.MouseButton2) and i.UserInputType.Name==Library.Flags[f] then
+if cb then cb() end
+end
+end
+end)
 end
 function e:CreateDropdown(txt,f,ls,cb)
 Library.Flags[f]=ls[1];local ih=35
@@ -101,10 +139,11 @@ end
 function w:CreateConfigTab()
 local t=self:CreateTab("Settings")
 t:CreateTextBox("Config Name...","ConfigName","DefaultConfig")
-t:CreateButton("Save Config",function() if writefile then local n=Library.Flags["ConfigName"]..".json";writefile(n,HttpService:JSONEncode(Library.Flags));Library:Notify("Config","Saved to "..n,3) else Library:Notify("Error","Your executor does not support writefile.",3) end end)
-t:CreateButton("Load Config",function() local n=Library.Flags["ConfigName"]..".json";if isfile and isfile(n) then local s,r=pcall(function() return HttpService:JSONDecode(readfile(n)) end);if s and type(r)=="table" then for k,v in pairs(r) do Library.Flags[k]=v end;Library:Update();Library:Notify("Config","Successfully loaded "..n,3) else Library:Notify("Error","Failed to parse config file.",3) end else Library:Notify("Error","File not found!",3) end end)
-t:CreateButton("Destroy UI",function() Library.ScreenGui:Destroy();if Library.Notifications then Library.Notifications.Parent:Destroy() end end)
+t:CreateButton("Save Config",function() Library:SaveConfig(Library.Flags["ConfigName"]) end)
+t:CreateButton("Load Config",function() Library:LoadConfig(Library.Flags["ConfigName"]) end)
+t:CreateButton("Destroy UI",function() Library:UIDelete() end)
 end
+if settingsEnabled then w:CreateConfigTab() end
 return w
 end
 return Library
