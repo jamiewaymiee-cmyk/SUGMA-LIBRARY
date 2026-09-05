@@ -92,6 +92,24 @@ local bx=Instance.new("TextBox");bx.Size=UDim2.new(1,-20,1,0);bx.Position=UDim2.
 Library.Elements[f]={Type="TextBox",Box=bx}
 bx.FocusLost:Connect(function() Library.Flags[f]=bx.Text;if cb then cb(bx.Text) end end)
 end
+-- NEW: TextBox that "sends" its content (via Send button or Enter key), then clears itself
+function e:CreateTextBoxSend(txt,f,df,cb)
+Library.Flags[f]=df or ""
+local bf=Instance.new("Frame");bf.Size=UDim2.new(1,-10,0,45);applyGlassEffect(bf,6,0.5,0.7);bf.Parent=p
+local bx=Instance.new("TextBox");bx.Size=UDim2.new(1,-95,1,0);bx.Position=UDim2.new(0,10,0,0);bx.BackgroundTransparency=1;bx.Text=Library.Flags[f];bx.PlaceholderText=txt;bx.ClearTextOnFocus=false;bx.Font=Enum.Font.Gotham;bx.TextColor3=Library.Theme.Text;bx.TextSize=14;bx.TextXAlignment=Enum.TextXAlignment.Left;bx.Parent=bf
+local sbtn=Instance.new("TextButton");sbtn.Size=UDim2.new(0,75,0,32);sbtn.Position=UDim2.new(1,-82,0.5,-16);sbtn.Text="Send";sbtn.Font=Enum.Font.GothamBold;sbtn.TextColor3=Library.Theme.Text;sbtn.TextSize=13;sbtn.BackgroundColor3=Library.Theme.Accent;applyGlassEffect(sbtn,4,0.1,nil);sbtn.Parent=bf
+Library.Elements[f]={Type="TextBox",Box=bx}
+local function send()
+local content=bx.Text
+if content=="" then return end
+Library.Flags[f]=content
+if cb then cb(content) end
+bx.Text=""
+Library.Flags[f]=""
+end
+sbtn.MouseButton1Click:Connect(send)
+bx.FocusLost:Connect(function(enterPressed) if enterPressed then send() end end)
+end
 function e:CreateToggle(txt,f,df,cb)
 Library.Flags[f]=df or false
 local tg=Instance.new("TextButton");tg.Size=UDim2.new(1,-10,0,45);tg.Text=" "..txt;tg.Font=Enum.Font.Gotham;tg.TextColor3=Library.Theme.Text;tg.TextSize=14;tg.TextXAlignment=Enum.TextXAlignment.Left;applyGlassEffect(tg,6,0.5,0.7);tg.Parent=p
